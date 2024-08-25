@@ -13,7 +13,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""A simple sub-command framework."""
+"""A simple sub-command framework.
+
+Usage example:
+
+```
+#!/bin/env python3
+
+import commands
+
+class HelloDear(commands.Command):
+    def __init__(self):
+        super(FetchDetails, self).__init__()
+        self.parser.add_argument("name", nargs="?")
+
+    def Main(self):
+        print(f"Hello, dear {self.args.name}.")
+
+if __name__ == "__main__":
+    commands.Command.Run()
+```
+
+Assuming the above is saved as `example.py`:
+
+```
+./example.py hello_dear me
+```
+
+Outputs: `Hello, dear me.`
+"""
 
 import argparse
 import bz2
@@ -85,33 +113,6 @@ class Command(ABC):
 
     The arguments are being parsed through `Prepare` which is always called
     right before `Main` gets invoked.
-
-    Example:
-
-    ```
-    #!/bin/env python3
-
-    import commands
-
-    class HelloDear(commands.Command):
-        def __init__(self):
-            super(FetchDetails, self).__init__()
-            self.parser.add_argument("name", nargs="?")
-
-        def Main(self):
-            print(f"Hello, dear {self.args.name}.")
-
-    if __name__ == "__main__":
-        commands.Command.Run()
-    ```
-
-    Assuming the above is saved as `example.py`:
-
-    ```
-    ./example.py hello_dear me
-    ```
-
-    Outputs: `Hello, dear me.`
     """
 
     _commands: dict[str, type] = {}
