@@ -28,17 +28,12 @@ import os
 import re
 import sys
 import time
-from abc import ABC
-from abc import abstractmethod
-from datetime import datetime
-from datetime import timedelta
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from circleci.commands import Command
-from circleci.commands import Die
-from circleci.commands import Log
-from circleci.commands import Print
+from circleci.commands import Command, Die, Log, Print
 
 FETCH_WORKFLOW_KEYS = [
     "branch",
@@ -144,11 +139,10 @@ class CircleCi:
             params["page-token"] = next_page_token
         Log(f"Read {len(items)} items from '{workflow}' in {requests} requests.")
         return items
-    
+
     def RequestWorkflowDetails(self, workflow: str) -> dict[str, str]:
         """Returns deaults for the given `workflow`."""
         return self._Request(api=f"api/v2/workflow/{workflow}")
-
 
     def ParseTime(self, dt: str) -> datetime:
         if dt.endswith("Z") and dt[len(dt) - 2] in "0123456789":
@@ -181,10 +175,14 @@ class CircleCiCommand(Command):
         super(CircleCiCommand, self).Prepare()
         circleci_token = str(self.args.circleci_token or os.getenv("CIRCLECI_TOKEN"))
         if not circleci_token:
-            Die("Must provide `--circleci_token` flag or environment variable 'CIRCLECI_TOKEN'.")
+            Die(
+                "Must provide `--circleci_token` flag or environment variable 'CIRCLECI_TOKEN'."
+            )
         project_slug = str(self.args.project_slug or os.getenv("CIRCLECI_PROJECT_SLUG"))
         if not project_slug:
-            Die("Must provide `--project_slug` flag or environment variable 'CIRCLECI_PROJECT_SLUG'.")
+            Die(
+                "Must provide `--project_slug` flag or environment variable 'CIRCLECI_PROJECT_SLUG'."
+            )
         self.circleci = CircleCi(circleci_token, project_slug=project_slug)
 
 
@@ -317,10 +315,7 @@ class FetchDetails(CircleCiCommand):
             help="Name of the output file.",
         )
         self.parser.add_argument(
-            "--progress",
-            type=bool,
-            default=True,
-            help="Whether to indicate progress."
+            "--progress", type=bool, default=True, help="Whether to indicate progress."
         )
 
     def Main(self) -> None:
@@ -329,7 +324,9 @@ class FetchDetails(CircleCiCommand):
         if self.args.progress:
             Log("Fetching workflow details:", end="")
         with self.Open(filename=self.args.input, mode="r") as csv_file:
-            reader = csv.DictReader(csv_file, delimiter=",", fieldnames=FETCH_WORKFLOW_KEYS)
+            reader = csv.DictReader(
+                csv_file, delimiter=",", fieldnames=FETCH_WORKFLOW_KEYS
+            )
             headers = next(reader, None)
             for index, row in enumerate(reader, 1):
                 if self.args.progress:
@@ -347,7 +344,9 @@ class FetchDetails(CircleCiCommand):
             Log()
         Log(f"Read {len(data)} details.")
         with self.Open(filename=self.args.output, mode="w") as csv_file:
-            writer = csv.DictWriter(csv_file, delimiter=",", fieldnames=FETCH_WORKFLOW_DETAIL_KEYS)
+            writer = csv.DictWriter(
+                csv_file, delimiter=",", fieldnames=FETCH_WORKFLOW_DETAIL_KEYS
+            )
             writer.writeheader()
             writer.writerows(sorted(data.values(), key=lambda d: d["created_unix"]))
         Log(f"Wrote {self.args.output}")
@@ -433,25 +432,25 @@ class Filter(Command):
             type=bool,
             default=True,
             help="If workflow details are available, reject inomplete reruns "
-                 "(e.g.: rerun-single-job, rerun-workflow-from-failed)."
+            "(e.g.: rerun-single-job, rerun-workflow-from-failed).",
         )
         self.parser.add_argument(
             "--only_branches",
             type=str,
             default="",
-            help="Accept branches by full regular expression match."
+            help="Accept branches by full regular expression match.",
         )
         self.parser.add_argument(
             "--only_status",
             type=str,
             default="success",
-            help="Accept only listed status values (multiple separated by comma)."
+            help="Accept only listed status values (multiple separated by comma).",
         )
         self.parser.add_argument(
             "--only_weekdays",
             type=str,
             default="12345",
-            help="Accept only the listed days of the week as indexed 1=Monday through 7=Sunday (ISO notation)."
+            help="Accept only the listed days of the week as indexed 1=Monday through 7=Sunday (ISO notation).",
         )
 
     def ParseTime(self, dt: str) -> datetime:
@@ -487,15 +486,25 @@ class Filter(Command):
         count_rows = 0
         count_pass = 0
         workflows: set[str] = set()
-        exclude_branches = re.compile(self.args.exclude_branches) if self.args.exclude_branches else None
-        only_branches = re.compile(self.args.only_branches) if self.args.only_branches else None
+        exclude_branches = (
+            re.compile(self.args.exclude_branches)
+            if self.args.exclude_branches
+            else None
+        )
+        only_branches = (
+            re.compile(self.args.only_branches) if self.args.only_branches else None
+        )
         only_status = set(self.args.only_status.split(","))
         if [c for c in self.args.only_weekdays if c not in "1234567"]:
-            Die("Flag '--only_weekdays' must only contain weekday indices 1=Monday through 7=Sunday (ISO notation).")
+            Die(
+                "Flag '--only_weekdays' must only contain weekday indices 1=Monday through 7=Sunday (ISO notation)."
+            )
         with self.Open(filename=self.args.input, mode="r") as csv_file:
             reader = csv.DictReader(csv_file, delimiter=",")
             if set(reader.fieldnames or []) == set(FETCH_WORKFLOW_KEYS):
-                Log("Loading workflow CSV file without workflow details (see command fetch_details).")
+                Log(
+                    "Loading workflow CSV file without workflow details (see command fetch_details)."
+                )
             elif set(reader.fieldnames or []) == set(FETCH_WORKFLOW_DETAIL_KEYS):
                 Log("Loading workflow-detail CSV file.")
                 has_details = True
@@ -509,7 +518,11 @@ class Filter(Command):
                     continue
                 if only_status and row["status"] not in only_status:
                     continue
-                if has_details and self.args.exclude_incomplete_reruns and row["tag"] not in ["", "rerun-workflow-from-beginning"]:
+                if (
+                    has_details
+                    and self.args.exclude_incomplete_reruns
+                    and row["tag"] not in ["", "rerun-workflow-from-beginning"]
+                ):
                     continue
                 duration = int(row["duration"]) / 60
                 if duration * 60 < self.args.min_duration_sec:

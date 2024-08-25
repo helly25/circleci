@@ -50,8 +50,7 @@ import inspect
 import io
 import re
 import sys
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -81,10 +80,11 @@ def SnakeCase(text: str) -> str:
     and acronyms, separate them by space. Then join the words with underscores
     and convert the result to lowercase.
     """
-    return '_'.join(
-        re.sub('([A-Z][a-z]+)', r' \1',
-            re.sub('([A-Z]+)', r' \1',
-                text.replace('-', ' '))).split()).lower()
+    return "_".join(
+        re.sub(
+            "([A-Z][a-z]+)", r" \1", re.sub("([A-Z]+)", r" \1", text.replace("-", " "))
+        ).split()
+    ).lower()
 
 
 class Command(ABC):
@@ -157,7 +157,8 @@ class Command(ABC):
     def Run():
         program = sys.argv[0]
         match = re.fullmatch(
-            "(?:.*/)?bazel-out/.*/bin/.*[.]runfiles/(?:__main__|_main)/(.*)/([^/]+)[.]py", program
+            "(?:.*/)?bazel-out/.*/bin/.*[.]runfiles/(?:__main__|_main)/(.*)/([^/]+)[.]py",
+            program,
         )
         if match:
             program = f"bazel run //{match.group(1)}:{match.group(2)} --"
