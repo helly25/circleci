@@ -14,3 +14,10 @@
 # limitations under the License.
 
 """Tools."""
+
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+bzl_library(
+    name = "aspects_bzl",
+    srcs = ["aspects.bzl"],
+)
