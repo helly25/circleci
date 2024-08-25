@@ -15,6 +15,8 @@
 
 """CircleCI API command line tools."""
 
+_PYTHON_VERSION = "3.12"
+
 module(
     name = "circleci",
     repo_name = "com_helly25_circleci",
@@ -31,7 +33,7 @@ python = use_extension(
     "python",
     dev_dependency = True,
 )
-python.toolchain(python_version = "3.11")
+python.toolchain(python_version = _PYTHON_VERSION)
 
 pip = use_extension(
     "@rules_python//python/extensions:pip.bzl",
@@ -40,7 +42,7 @@ pip = use_extension(
 )
 pip.parse(
     hub_name = "my_pip_deps",
-    python_version = "3.11",
+    python_version = _PYTHON_VERSION,
     requirements_lock = "//:requirements.txt",
 )
 use_repo(pip, "my_pip_deps")
@@ -49,10 +51,7 @@ use_repo(pip, "my_pip_deps")
 types = use_extension("@rules_mypy//mypy:types.bzl", "types")
 types.requirements(
     name = "pip_types",
-    # `@pip` in the next line corresponds to the `hub_name` when using
-    # rules_python's `pip.parse(...)`.
     pip_requirements = "@my_pip_deps//:requirements.bzl",
-    # also legal to pass a `requirements.in` here
     requirements_txt = "//:requirements.txt",
 )
 use_repo(types, "pip_types")
