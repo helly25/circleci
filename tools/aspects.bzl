@@ -13,10 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-common --enable_bzlmod
+"""Aspect definitions for mypy."""
 
-# register mypy_aspect with Bazel
-common --aspects //tools:aspects.bzl%mypy_aspect
+load("@pip_types//:types.bzl", "types")
+load("@rules_mypy//mypy:mypy.bzl", "mypy")
 
-# optionally, default enable the mypy checks
-common --output_groups=+mypy
+mypy_aspect = mypy(types = types)

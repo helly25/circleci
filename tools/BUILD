@@ -13,10 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-common --enable_bzlmod
-
-# register mypy_aspect with Bazel
-common --aspects //tools:aspects.bzl%mypy_aspect
-
-# optionally, default enable the mypy checks
-common --output_groups=+mypy
+"""Tools."""

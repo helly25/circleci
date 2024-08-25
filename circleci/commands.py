@@ -25,24 +25,24 @@ import sys
 from abc import ABC
 from abc import abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from TYPE_CHECKING import OpenTextMode
+    from _typeshed import OpenTextMode
 else:
     OpenTextMode = str
 
 
-def Die(message: str):
+def Die(message: Any):
     print(f"FATAL: {message}", flush=True, file=sys.stderr)
     exit(1)
 
 
-def Log(message: str = "", end="\n", flush=True, file=sys.stderr):
+def Log(message: Any = "", end="\n", flush=True, file=sys.stderr):
     print(message, end=end, flush=flush, file=file)
 
 
-def Print(message: str = "", end="\n", flush=False, file=sys.stdout):
+def Print(message: Any = "", end="\n", flush=False, file=sys.stdout):
     print(message, end=end, flush=flush, file=file)
 
 
@@ -119,18 +119,16 @@ class Command(ABC):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if not inspect.isabstract(cls):
-            cls._commands[cls.name] = cls
+            cls._commands[cls.name()] = cls
 
     def __init__(self):
-        self.parser = argparse.ArgumentParser(description=self.description)
+        self.parser = argparse.ArgumentParser(description=self.description())
 
     @classmethod
-    @property
     def name(cls):
         return SnakeCase(cls.__name__)
 
     @classmethod
-    @property
     def description(cls):
         return cls.__doc__
 
@@ -141,10 +139,13 @@ class Command(ABC):
     def Main(self):
         pass
 
-    def Open(self, filename: Path, mode: OpenTextMode) -> io.TextIOWrapper:
+    def Open(self, filename: Path, mode: OpenTextMode) -> Any:
         """Opens `filename` in `mode`, supporting '.gz' and '.bz2' files."""
-        if not "b" in mode and not "t" in mode:
-            mode += "t"
+        # TODO(helly25): Figure out how to actually return TextIOWrapper or something similar.
+        if mode == "r":
+            mode = "rt"
+        elif mode == "w":
+            mode = "wt"
         if filename.suffix == ".gz":
             return gzip.open(filename=filename, mode=mode)
         if filename.suffix == ".bz2":
@@ -176,7 +177,7 @@ class Command(ABC):
             c_len = 3 + max([len(c) for c in commands.keys()])
             for name, command in commands.items():
                 name = name + ":"
-                Print(f"  {name:{c_len}s}{command.description}")
+                Print(f"  {name:{c_len}s}{command.description()}")
             Print()
             Print(f"For help use: {program} <command> --help.")
             exit(1)

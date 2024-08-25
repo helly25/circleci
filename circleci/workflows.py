@@ -33,6 +33,7 @@ from abc import abstractmethod
 from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 from circleci.commands import Command
 from circleci.commands import Die
@@ -75,7 +76,7 @@ class CircleCi:
         self.circleci_token = circleci_token
         self.project_slug = project_slug
 
-    def _Request(self, api: str, params: dict[str, str] = {}) -> str:
+    def _Request(self, api: str, params: dict[str, str] = {}) -> Any:
         headers = {
             # 'authorization': self.circleci_token,
             "Circle-Token": self.circleci_token,
@@ -85,16 +86,15 @@ class CircleCi:
         url = f"http://circleci.com/{api}?{parms}"
         conn.request("GET", url, headers=headers)
         res = conn.getresponse()
-        return res.read().decode("utf-8")
+        data = res.read().decode("utf-8")
+        return json.loads(data)
 
     def RequestBranches(self, workflow: str) -> list[str]:
         """Returns a list of branches for the given `workflow`."""
-        branches = []
         data = self._Request(
             api=f"api/v2/insights/{self.project_slug}/branches",
             params={"workflow-name": workflow},
         )
-        data = json.loads(data)
         branches = data["branches"]
         Log(f"Read {len(branches)} branches.")
         return branches
@@ -102,7 +102,6 @@ class CircleCi:
     def RequestWorkflows(self) -> list[str]:
         """Returns a list of workflows."""
         workflows: set[str] = set()
-        next_page_token = None
         requests = 0
         params: dict[str, str] = {
             "all-branches": "True",
@@ -111,16 +110,17 @@ class CircleCi:
         projects: set[str] = set()
         while 1:
             requests += 1
-            data = self._Request(
+            data: Any = self._Request(
                 api=f"/api/v2/insights/{self.project_slug}/workflows", params=params
             )
-            data = json.loads(data)
-            for item in data.get("items", []):
+            items: list[dict[str, str]] = data["items"]
+            for item in items:
                 workflows.add(item["name"])
                 projects.add(item["project_id"])
-            params["page-token"] = data.get("next_page_token")
-            if not params["page-token"]:
+            next_page_token: str = data.get("next_page_token", "")
+            if not next_page_token:
                 break
+            params["page-token"] = next_page_token
         return sorted(workflows)
 
     def RequestWorkflowRuns(
@@ -135,22 +135,19 @@ class CircleCi:
                 api=f"/api/v2/insights/{self.project_slug}/workflows/{workflow}",
                 params=params,
             )
-            data = json.loads(data)
             next_items = data.get("items")
             if next_items:
                 items.extend(next_items)
-            params["page-token"] = data.get("next_page_token")
-            if not params["page-token"]:
+            next_page_token = data.get("next_page_token", "")
+            if not next_page_token:
                 break
+            params["page-token"] = next_page_token
         Log(f"Read {len(items)} items from '{workflow}' in {requests} requests.")
         return items
     
     def RequestWorkflowDetails(self, workflow: str) -> dict[str, str]:
         """Returns deaults for the given `workflow`."""
-        branches = []
-        data = self._Request(api=f"api/v2/workflow/{workflow}")
-        data = json.loads(data)
-        return data
+        return self._Request(api=f"api/v2/workflow/{workflow}")
 
 
     def ParseTime(self, dt: str) -> datetime:
@@ -182,10 +179,10 @@ class CircleCiCommand(Command):
 
     def Prepare(self) -> None:
         super(CircleCiCommand, self).Prepare()
-        circleci_token = self.args.circleci_token or os.getenv("CIRCLECI_TOKEN")
+        circleci_token = str(self.args.circleci_token or os.getenv("CIRCLECI_TOKEN"))
         if not circleci_token:
             Die("Must provide `--circleci_token` flag or environment variable 'CIRCLECI_TOKEN'.")
-        project_slug = self.args.project_slug or os.getenv("CIRCLECI_PROJECT_SLUG")
+        project_slug = str(self.args.project_slug or os.getenv("CIRCLECI_PROJECT_SLUG"))
         if not project_slug:
             Die("Must provide `--project_slug` flag or environment variable 'CIRCLECI_PROJECT_SLUG'.")
         self.circleci = CircleCi(circleci_token, project_slug=project_slug)
@@ -282,8 +279,8 @@ class Fetch(CircleCiCommand):
                 run_count += len(runs)
                 for run in runs:
                     run["workflow"] = workflow
-                    created = self.circleci.ParseTime(run["created_at"])
-                    stopped = self.circleci.ParseTime(run["stopped_at"])
+                    created: datetime = self.circleci.ParseTime(run["created_at"])
+                    stopped: datetime = self.circleci.ParseTime(run["stopped_at"])
                     if not max_created or created > max_created:
                         max_created = created
                     if not min_created or created < min_created:
@@ -297,8 +294,10 @@ class Fetch(CircleCiCommand):
                     data = ",".join([str(run[k]) for k in keys])
                     print(data, file=csv_file)
         Log(f"Read {run_count} items.")
-        Log(f"Max Date: {max_created.strftime(r'%Y.%m.%d')}.")
-        Log(f"Min Date: {min_created.strftime(r'%Y.%m.%d')}.")
+        if max_created:
+            Log(f"Max Date: {max_created.strftime(r'%Y.%m.%d')}.")
+        if min_created:
+            Log(f"Min Date: {min_created.strftime(r'%Y.%m.%d')}.")
 
 
 class FetchDetails(CircleCiCommand):
@@ -324,7 +323,7 @@ class FetchDetails(CircleCiCommand):
             help="Whether to indicate progress."
         )
 
-    def Main(self):
+    def Main(self) -> None:
         Log(f"Read file {self.args.input}...")
         data: dict[str, dict[str, str]] = {}
         if self.args.progress:
@@ -335,7 +334,7 @@ class FetchDetails(CircleCiCommand):
             for index, row in enumerate(reader, 1):
                 if self.args.progress:
                     if not index % 1000:
-                        Log(index)
+                        Log(f"{index}")
                         Log("Fetching workflow details:", end="")
                     elif not index % 20:
                         Log(".", end="")
@@ -389,7 +388,7 @@ class Combine(Command):
                 Log(f"Read file {filename} with {rows} rows.")
         with self.Open(filename=self.args.output, mode="w") as csv_file:
             writer = csv.DictWriter(csv_file, delimiter=",", fieldnames=keys)
-            writer.writeheader(keys)
+            writer.writeheader()
             writer.writerows(sorted(data.values(), key=lambda d: d["created_unix"]))
         Log(f"Wrote file {self.args.output} with {len(data)} rows.")
 
@@ -495,9 +494,9 @@ class Filter(Command):
             Die("Flag '--only_weekdays' must only contain weekday indices 1=Monday through 7=Sunday (ISO notation).")
         with self.Open(filename=self.args.input, mode="r") as csv_file:
             reader = csv.DictReader(csv_file, delimiter=",")
-            if set(reader.fieldnames) == set(FETCH_WORKFLOW_KEYS):
+            if set(reader.fieldnames or []) == set(FETCH_WORKFLOW_KEYS):
                 Log("Loading workflow CSV file without workflow details (see command fetch_details).")
-            elif set(reader.fieldnames) == set(FETCH_WORKFLOW_DETAIL_KEYS):
+            elif set(reader.fieldnames or []) == set(FETCH_WORKFLOW_DETAIL_KEYS):
                 Log("Loading workflow-detail CSV file.")
                 has_details = True
             else:
@@ -531,7 +530,7 @@ class Filter(Command):
                 else:
                     data[date].append(row)
                 count_pass += 1
-        data = [data[k] for k in sorted(data)]
+        sorted_data = [data[k] for k in sorted(data)]
         Log(f"Read {count_rows} rows.")
         Log(f"Aggregated {count_pass} rows.")
         Log(f"Workflows: {workflows}.")
@@ -539,7 +538,7 @@ class Filter(Command):
         with self.Open(filename=self.args.output, mode="w") as csv_file:
             writer = csv.DictWriter(csv_file, fieldnames=keys, extrasaction="ignore")
             writer.writeheader()
-            for rows in data:
+            for rows in sorted_data:
                 durations = [float(row["duration"]) for row in rows]
                 r_cnt = len(durations)
                 r_max = self.MaxWithoutOutlier(durations)
@@ -554,9 +553,9 @@ class Filter(Command):
                         "runs": str(r_cnt),
                     }
                 )
-        Log(f"First {data[0][0]['date']}")
-        Log(f"Last  {data[-1][0]['date']}")
-        Log(f"Wrote {len(data)} rows to '{self.args.output}'.")
+        Log(f"First {sorted_data[0][0]['date']}")
+        Log(f"Last  {sorted_data[-1][0]['date']}")
+        Log(f"Wrote {len(sorted_data)} rows to '{self.args.output}'.")
 
 
 if __name__ == "__main__":
