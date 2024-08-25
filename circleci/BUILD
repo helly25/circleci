@@ -15,19 +15,12 @@
 
 """Tool to fetch and analyze CircleCI workflows."""
 
-#load("@mypy_integration//:mypy.bzl", "mypy_test")
-
 package(default_visibility = ["//visibility:private"])
 
 py_library(
     name = "commands_py",
     srcs = ["commands.py"],
 )
-
-#mypy_test(
-#    name = "commands_mypy_test",
-#    deps = [":commands_py"]
-#)
 
 py_binary(
     name = "workflows",
@@ -36,8 +29,3 @@ py_binary(
     tags = ["manual"],
     deps = ["commands_py"],
 )
-
-#mypy_test(
-#    name = "workflows_mypy_test",
-#    deps = [":workflows"]
-#)
