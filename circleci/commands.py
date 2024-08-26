@@ -65,12 +65,12 @@ def Die(message: Any):
     exit(1)
 
 
-def Log(message: Any = "", end="\n", flush=True, file=sys.stderr):
-    print(message, end=end, flush=flush, file=file)
+def Log(message: Any = "", end="\n", flush=True, file=None):
+    print(message, end=end, flush=flush, file=file or sys.stderr)
 
 
-def Print(message: Any = "", end="\n", flush=False, file=sys.stdout):
-    print(message, end=end, flush=flush, file=file)
+def Print(message: Any = "", end="\n", flush=False, file=None):
+    print(message, end=end, flush=flush, file=file or sys.stdout)
 
 
 def OpenTextFile(
@@ -200,13 +200,13 @@ class Command(ABC):
         else:
             command = None
         if len(argv) < 2 or not command:
-            Command.Help()
+            Command.Help(program)
         argv = [argv[0]] + argv[2:]
         command.Prepare(argv)
         command.Main()
 
     @staticmethod
-    def Help():
+    def Help(program: str):
         Print(f"Usage:\n  {program} <command> [args...]")
         Print()
         Print(

@@ -20,6 +20,20 @@ load("@my_pip_deps//:requirements.bzl", "requirement")
 package(default_visibility = ["//visibility:private"])
 
 py_library(
+    name = "circleci_api_v2_py",
+    srcs = ["circleci_api_v2.py"],
+)
+
+py_test(
+    name = "circleci_api_v2_test",
+    srcs = ["circleci_api_v2_test.py"],
+    deps = [
+        ":circleci_api_v2_py",
+        requirement("parameterized"),
+    ],
+)
+
+py_library(
     name = "commands_py",
     srcs = ["commands.py"],
 )
@@ -33,10 +47,33 @@ py_test(
     ],
 )
 
+py_library(
+    name = "workflows_lib_py",
+    srcs = ["workflows_lib.py"],
+    deps = [
+        ":circleci_api_v2_py",
+        ":commands_py",
+    ],
+)
+
+py_test(
+    name = "workflows_lib_test",
+    srcs = ["workflows_lib_test.py"],
+    deps = [
+        ":circleci_api_v2_py",
+        ":commands_py",
+        ":workflows_lib_py",
+        requirement("parameterized"),
+    ],
+)
+
 py_binary(
     name = "workflows",
-    testonly = True,
     srcs = ["workflows.py"],
+    deps = [
+        ":commands_py",
+        ":workflows_lib_py",
+    ],
+    testonly = True,
     tags = ["manual"],
-    deps = ["commands_py"],
 )

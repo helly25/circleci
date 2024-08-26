@@ -19,7 +19,6 @@ import io
 import sys
 import unittest
 from contextlib import redirect_stdout
-from unittest.mock import patch
 
 from parameterized import parameterized
 
@@ -40,6 +39,8 @@ class HelloDear(Command):
 
 
 class Test(unittest.TestCase):
+    """Tests for the Command framework."""
+
     @parameterized.expand(
         [
             ("", ""),
