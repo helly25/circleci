@@ -33,7 +33,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from circleci.commands import Command, Die, Log, Print
+from circleci.commands import Command, Die, Log, OpenTextFile, Print
 
 FETCH_WORKFLOW_KEYS = [
     "branch",
@@ -262,7 +262,7 @@ class Fetch(CircleCiCommand):
             workflows = self.circleci.RequestWorkflows()
         max_created: datetime | None = None
         min_created: datetime | None = None
-        with self.Open(filename=self.args.output, mode="w") as csv_file:
+        with OpenTextFile(filename=self.args.output, mode="w") as csv_file:
             keys = FETCH_WORKFLOW_KEYS
             print(f"{','.join(keys)}", file=csv_file)
             for workflow in workflows:
@@ -323,7 +323,7 @@ class FetchDetails(CircleCiCommand):
         data: dict[str, dict[str, str]] = {}
         if self.args.progress:
             Log("Fetching workflow details:", end="")
-        with self.Open(filename=self.args.input, mode="r") as csv_file:
+        with OpenTextFile(filename=self.args.input, mode="r") as csv_file:
             reader = csv.DictReader(
                 csv_file, delimiter=",", fieldnames=FETCH_WORKFLOW_KEYS
             )
@@ -343,7 +343,7 @@ class FetchDetails(CircleCiCommand):
         if self.args.progress:
             Log()
         Log(f"Read {len(data)} details.")
-        with self.Open(filename=self.args.output, mode="w") as csv_file:
+        with OpenTextFile(filename=self.args.output, mode="w") as csv_file:
             writer = csv.DictWriter(
                 csv_file, delimiter=",", fieldnames=FETCH_WORKFLOW_DETAIL_KEYS
             )
@@ -377,7 +377,7 @@ class Combine(Command):
         data: dict[str, dict[str, str]] = {}
         for filename in self.args.input:
             Log(f"Read file {filename}...")
-            with self.Open(filename=filename, mode="r") as csv_file:
+            with OpenTextFile(filename=filename, mode="r") as csv_file:
                 reader = csv.DictReader(csv_file, delimiter=",", fieldnames=keys)
                 headers = next(reader, None)
                 rows = 0
@@ -385,7 +385,7 @@ class Combine(Command):
                     rows += 1
                     data[row["id"]] = row
                 Log(f"Read file {filename} with {rows} rows.")
-        with self.Open(filename=self.args.output, mode="w") as csv_file:
+        with OpenTextFile(filename=self.args.output, mode="w") as csv_file:
             writer = csv.DictWriter(csv_file, delimiter=",", fieldnames=keys)
             writer.writeheader()
             writer.writerows(sorted(data.values(), key=lambda d: d["created_unix"]))
@@ -499,7 +499,7 @@ class Filter(Command):
             Die(
                 "Flag '--only_weekdays' must only contain weekday indices 1=Monday through 7=Sunday (ISO notation)."
             )
-        with self.Open(filename=self.args.input, mode="r") as csv_file:
+        with OpenTextFile(filename=self.args.input, mode="r") as csv_file:
             reader = csv.DictReader(csv_file, delimiter=",")
             if set(reader.fieldnames or []) == set(FETCH_WORKFLOW_KEYS):
                 Log(
@@ -548,7 +548,7 @@ class Filter(Command):
         Log(f"Aggregated {count_pass} rows.")
         Log(f"Workflows: {workflows}.")
         keys = ["date", "avg", "max", "min", "runs"]
-        with self.Open(filename=self.args.output, mode="w") as csv_file:
+        with OpenTextFile(filename=self.args.output, mode="w") as csv_file:
             writer = csv.DictWriter(csv_file, fieldnames=keys, extrasaction="ignore")
             writer.writeheader()
             for rows in sorted_data:
