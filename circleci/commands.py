@@ -15,7 +15,7 @@
 
 """A simple sub-command framework.
 
-Usage example:
+For details read class `Command` documentation. Usage example:
 
 ```
 #!/bin/env python3
@@ -76,7 +76,18 @@ def Print(message: Any = "", end="\n", flush=False, file=sys.stdout):
 def OpenTextFile(
     filename: Path, mode: OpenTextMode, encoding="utf-8"
 ) -> io.TextIOWrapper:
-    """Opens `filename` in `mode`, supporting '.gz' and '.bz2' files."""
+    """Opens `filename` in `mode`, supporting '.gz' and '.bz2' files.
+
+    Args:
+        filename: The `Path` to be opened.
+        mode:     The text mode to open the file with (e.g. 'rt, 'wt').
+                  Modes `r` and `w` are automatically extended to `rt` and `wt`
+                  respectively.
+        encoding: The text encoding to use.
+
+    Returns:
+        The opened file as a `io.TextIOWrapper`.
+    """
     if mode == "r":
         mode = "rt"
     elif mode == "w":
@@ -97,14 +108,17 @@ def SnakeCase(text: str) -> str:
     """Convert `text` to snake_case.
 
     Replace dashes with spaces, then use regular expressions to split on words
-    and acronyms, separate them by space. Then join the words with underscores
-    and convert the result to lowercase.
+    and acronyms, separate them by space. Then join the words with underscores,
+    remove duplicate underscores and convert the result to lowercase.
+
+    Args:
+        text:   The inout text to convert.
+
+    Returns:
+        The Snake-Case version of `text`.
     """
-    return "_".join(
-        re.sub(
-            "([A-Z][a-z]+)", r" \1", re.sub("([A-Z]+)", r" \1", text.replace("-", " "))
-        ).split()
-    ).lower()
+    text = "_".join(re.sub("([A-Z]+[a-z]*)", r" \1", text.replace("-", " ")).split())
+    return re.sub("_+", "_", text).lower()
 
 
 class Command(ABC):
@@ -123,8 +137,8 @@ class Command(ABC):
     All derived Command classes that are not abstract (see above) register
     themselves as a Command. The Command's command-line (sub-command) name is
     the snake_case version of their class name. The Command description is the
-    class's document string. In the example below the class `HelloDear` becomes
-    sub-command `hello_dear`.
+    class's document string. In the example at the top the class `HelloDear`
+    becomes sub-command `hello_dear`.
 
     The base class provides an argument parser `argparse.ArgumentParser` as
     `self.parser`. That parser should be extended in the `__init__` methods of

@@ -22,6 +22,12 @@ py_library(
     srcs = ["commands.py"],
 )
 
+py_test(
+    name = "commands_test",
+    srcs = ["commands_test.py"],
+    deps = [":commands_py"],
+)
+
 py_binary(
     name = "workflows",
     testonly = True,
