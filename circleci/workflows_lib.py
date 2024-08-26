@@ -180,13 +180,13 @@ class Fetch(CircleCiCommand):
             "--end",
             default="",
             type=str,
-            help=r"Start Date/time in format `%Y%m%d`, defaults to `now`.",
+            help=r"End (newest) Date/time in format `%Y%m%d`, defaults to `now`.",
         )
         self.parser.add_argument(
             "--start",
             default="",
             type=str,
-            help=r"Start Date/time in format `%Y%m%d`, defaults to `--end` minus 90 days.",
+            help=r"Start (oldest) Date/time in format `%Y%m%d`, defaults to `--end` minus 90 days.",
         )
 
     def Main(self) -> None:
@@ -464,18 +464,22 @@ class Filter(Command):
             )
         with OpenTextFile(filename=self.args.input, mode="r") as csv_file:
             reader = csv.DictReader(csv_file, delimiter=",")
-            if set(reader.fieldnames or []) == set(FETCH_WORKFLOW_KEYS):
+            if not set(reader.fieldnames or []).issubset(
+                set(FETCH_WORKFLOW_DETAIL_KEYS)
+            ):
+                Die(
+                    f"File fieldnames '{reader.fieldnames}' not a subset of '{FETCH_WORKFLOW_DETAIL_KEYS}'."
+                )
+            if set(reader.fieldnames or []) == set(FETCH_WORKFLOW_DETAIL_KEYS):
+                Log("Loading workflow CSV file with all details.")
+                has_details = True
+            elif set(reader.fieldnames or []) == set(FETCH_WORKFLOW_KEYS):
                 Log(
                     "Loading workflow CSV file without workflow details (see command fetch_details)."
                 )
-            elif not set(reader.fieldnames or []).issubset(
-                set(FETCH_WORKFLOW_DETAIL_KEYS)
-            ):
-                Log("Loading workflow-detail CSV file.")
-                has_details = True
             else:
-                Die(
-                    f"File fieldnames '{reader.fieldnames}' not a subset of '{FETCH_WORKFLOW_DETAIL_KEYS}'."
+                Log(
+                    "Loading workflow CSV file with additional fields (see command fetch_details)."
                 )
             for row in reader:
                 count_rows += 1
