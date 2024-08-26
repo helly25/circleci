@@ -52,7 +52,7 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from _typeshed import OpenTextMode
@@ -71,6 +71,26 @@ def Log(message: Any = "", end="\n", flush=True, file=sys.stderr):
 
 def Print(message: Any = "", end="\n", flush=False, file=sys.stdout):
     print(message, end=end, flush=flush, file=file)
+
+
+def OpenTextFile(
+    filename: Path, mode: OpenTextMode, encoding="utf-8"
+) -> io.TextIOWrapper:
+    """Opens `filename` in `mode`, supporting '.gz' and '.bz2' files."""
+    if mode == "r":
+        mode = "rt"
+    elif mode == "w":
+        mode = "wt"
+    # Typeshed does not know that GZipFile and Bz2File use `io.TextIOWrapper` in text mode.
+    if filename.suffix == ".gz":
+        return cast(
+            io.TextIOWrapper, gzip.open(filename=filename, mode=mode, encoding=encoding)
+        )
+    if filename.suffix == ".bz2":
+        return cast(
+            io.TextIOWrapper, bz2.open(filename=filename, mode=mode, encoding=encoding)
+        )
+    return filename.open(mode=mode, encoding=encoding)
 
 
 def SnakeCase(text: str) -> str:
@@ -139,19 +159,6 @@ class Command(ABC):
     @abstractmethod
     def Main(self):
         pass
-
-    def Open(self, filename: Path, mode: OpenTextMode) -> Any:
-        """Opens `filename` in `mode`, supporting '.gz' and '.bz2' files."""
-        # TODO(helly25): Figure out how to actually return TextIOWrapper or something similar.
-        if mode == "r":
-            mode = "rt"
-        elif mode == "w":
-            mode = "wt"
-        if filename.suffix == ".gz":
-            return gzip.open(filename=filename, mode=mode)
-        if filename.suffix == ".bz2":
-            return bz2.open(filename=filename, mode=mode)
-        return filename.open(mode=mode)
 
     @staticmethod
     def Run():

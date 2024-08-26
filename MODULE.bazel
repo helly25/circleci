@@ -15,13 +15,13 @@
 
 """CircleCI API command line tools."""
 
-_PYTHON_VERSION = "3.12"
-
 module(
     name = "circleci",
     repo_name = "com_helly25_circleci",
     version = "0.0.0",
 )
+
+_PYTHON_VERSION = "3.12"
 
 bazel_dep(name = "rules_python", version = "0.34.0")
 bazel_dep(name = "bazel_skylib", version = "1.6.1")
@@ -46,7 +46,6 @@ pip.parse(
     requirements_lock = "//:requirements.txt",
 )
 use_repo(pip, "my_pip_deps")
-
 
 types = use_extension("@rules_mypy//mypy:types.bzl", "types")
 types.requirements(
