@@ -15,6 +15,8 @@
 
 """Tool to fetch and analyze CircleCI workflows."""
 
+load("@my_pip_deps//:requirements.bzl", "requirement")
+
 package(default_visibility = ["//visibility:private"])
 
 py_library(
@@ -25,7 +27,10 @@ py_library(
 py_test(
     name = "commands_test",
     srcs = ["commands_test.py"],
-    deps = [":commands_py"],
+    deps = [
+        ":commands_py",
+        requirement("parameterized"),
+    ],
 )
 
 py_binary(

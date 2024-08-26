@@ -35,6 +35,9 @@ from typing import Any
 
 from circleci.commands import Command, Die, Log, OpenTextFile, Print
 
+# Keys used by the `fetch` command.
+# Instead of `created_at` and `stopped_at` we provide `created`/`created_unix`
+# and `stopped`/`stopped_unix` respectively.
 FETCH_WORKFLOW_KEYS = [
     "branch",
     "created_unix",
@@ -49,8 +52,12 @@ FETCH_WORKFLOW_KEYS = [
     "workflow",
 ]
 
+# Keys used by the `fetch_details` command.
+# The `name` field is dropped since it is already available as `workflow`.
+# Otherwise the `fetch_details` command provides a superset of fields.
 FETCH_WORKFLOW_DETAIL_EXTRAS = [
     "canceled_by",
+    "errored_by",
     "pipeline_id",
     "pipeline_number",
     "project_slug",
@@ -67,18 +74,18 @@ class CircleCi:
     See https://circleci.com/docs/api/v2/index.html
     """
 
-    def __init__(self, circleci_token: str, project_slug: str):
+    def __init__(self, circleci_server: str, circleci_token: str, project_slug: str):
+        self.circleci_server = circleci_server.rstrip(".")
         self.circleci_token = circleci_token
         self.project_slug = project_slug
 
     def _Request(self, api: str, params: dict[str, str] = {}) -> Any:
         headers = {
-            # 'authorization': self.circleci_token,
-            "Circle-Token": self.circleci_token,
+            "Circle-Token": self.circleci_token,  # authorization
         }
         conn = http.client.HTTPSConnection("circleci.com")
         parms = "&".join([k + "=" + v for k, v in params.items()])
-        url = f"http://circleci.com/{api}?{parms}"
+        url = f"{self.circleci_server}/{api}?{parms}"
         conn.request("GET", url, headers=headers)
         res = conn.getresponse()
         data = res.read().decode("utf-8")
@@ -159,6 +166,15 @@ class CircleCiCommand(Command):
     def __init__(self):
         super(CircleCiCommand, self).__init__()
         self.parser.add_argument(
+            "--circleci_server",
+            default="",
+            type=str,
+            help=(
+                "The circleci server url including protocol (defaults to environment variable "
+                "'CIRCLECI_SERVER' which defaults to 'https://circleci.com')."
+            ),
+        )
+        self.parser.add_argument(
             "--circleci_token",
             default="",
             type=str,
@@ -171,19 +187,31 @@ class CircleCiCommand(Command):
             help="CircleCI project-slug (defaults to environment variable 'CIRCLECI_PROJECT_SLUG').",
         )
 
-    def Prepare(self) -> None:
-        super(CircleCiCommand, self).Prepare()
+    def Prepare(self, argv: list[str]) -> None:
+        super(CircleCiCommand, self).Prepare(argv)
+        circleci_server = str(
+            self.args.circleci_server
+            or os.getenv("CIRCLECI_SERVER", "https://circleci.com")
+        )
+        if not circleci_server:
+            Die(
+                "Must provide non empty `--circleci_server` flag or environment variable 'CIRCLECI_SERVER'."
+            )
         circleci_token = str(self.args.circleci_token or os.getenv("CIRCLECI_TOKEN"))
         if not circleci_token:
             Die(
-                "Must provide `--circleci_token` flag or environment variable 'CIRCLECI_TOKEN'."
+                "Must provide non empty `--circleci_token` flag or environment variable 'CIRCLECI_TOKEN'."
             )
         project_slug = str(self.args.project_slug or os.getenv("CIRCLECI_PROJECT_SLUG"))
         if not project_slug:
             Die(
-                "Must provide `--project_slug` flag or environment variable 'CIRCLECI_PROJECT_SLUG'."
+                "Must provide non empty `--project_slug` flag or environment variable 'CIRCLECI_PROJECT_SLUG'."
             )
-        self.circleci = CircleCi(circleci_token, project_slug=project_slug)
+        self.circleci = CircleCi(
+            circleci_server=circleci_server,
+            circleci_token=circleci_token,
+            project_slug=project_slug,
+        )
 
 
 class Branches(CircleCiCommand):
@@ -255,13 +283,13 @@ class Fetch(CircleCiCommand):
             start = datetime.strptime(self.args.start, r"%Y%m%d")
         else:
             start = end - timedelta(days=90)
-        run_count = 0
         if self.args.workflow:
             workflows = self.args.workflow.split(",")
         else:
             workflows = self.circleci.RequestWorkflows()
         max_created: datetime | None = None
         min_created: datetime | None = None
+        run_count = 0
         with OpenTextFile(filename=self.args.output, mode="w") as csv_file:
             keys = FETCH_WORKFLOW_KEYS
             print(f"{','.join(keys)}", file=csv_file)

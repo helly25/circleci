@@ -52,7 +52,7 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Type, cast
 
 if TYPE_CHECKING:
     from _typeshed import OpenTextMode
@@ -149,7 +149,7 @@ class Command(ABC):
     right before `Main` gets invoked.
     """
 
-    _commands: dict[str, type] = {}
+    _commands: dict[str, Type] = {}
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -167,44 +167,58 @@ class Command(ABC):
     def description(cls):
         return cls.__doc__
 
-    def Prepare(self) -> None:
-        self.args = self.parser.parse_args()
+    def Prepare(self, argv: list[str]) -> None:
+        """Prepare the command for execution by parsing the arguments in `argv`.
+
+        Args:
+            argv:  Unlike `Argparse.parse_args` this does not allow to be called
+                   without arguments and requires the full `argv` including the
+                   program argument at index 0. Effectivly this achieves the
+                   same as if `Argparse.parse_args` was passed no argument (in
+                   which case it uses `sys.argv`.
+        """
+        self.args = self.parser.parse_args(argv[1:])
 
     @abstractmethod
     def Main(self):
         pass
 
     @staticmethod
-    def Run():
-        program = sys.argv[0]
+    def Run(argv: list[str] = sys.argv):
+        program = argv[0] if argv else "-"
+        command_name = argv[1] if len(argv) > 1 else ""
         match = re.fullmatch(
             "(?:.*/)?bazel-out/.*/bin/.*[.]runfiles/(?:__main__|_main)/(.*)/([^/]+)[.]py",
             program,
         )
         if match:
             program = f"bazel run //{match.group(1)}:{match.group(2)} --"
-        commands: dict[str, Command] = {
-            name: c() for name, c in __class__._commands.items()
-        }
-        if not commands:
+        if not Command._commands:
             Die("No Commands were implemented.")
-        if len(sys.argv) < 2 or sys.argv[1] not in commands.keys():
-            Print(f"Usage:\n  {program} <command> [args...]")
-            Print()
-            Print(
-                "Most file based parameters transparently support gzip and bz2 compression when "
-                "they have a '.gz' or '.bz2' extension respectively."
-            )
-            Print()
-            Print("Commands:")
-            c_len = 3 + max([len(c) for c in commands.keys()])
-            for name, command in commands.items():
-                name = name + ":"
-                Print(f"  {name:{c_len}s}{command.description()}")
-            Print()
-            Print(f"For help use: {program} <command> --help.")
-            exit(1)
-        command = commands[sys.argv[1]]
-        sys.argv = [sys.argv[0]] + sys.argv[2:]
-        command.Prepare()
+        if command_name in Command._commands.keys():
+            command = Command._commands[command_name]()
+        else:
+            command = None
+        if len(argv) < 2 or not command:
+            Command.Help()
+        argv = [argv[0]] + argv[2:]
+        command.Prepare(argv)
         command.Main()
+
+    @staticmethod
+    def Help():
+        Print(f"Usage:\n  {program} <command> [args...]")
+        Print()
+        Print(
+            "Most file based parameters transparently support gzip and bz2 compression when "
+            "they have a '.gz' or '.bz2' extension respectively."
+        )
+        Print()
+        Print("Commands:")
+        c_len = 3 + max([len(c) for c in Command._commands.keys()])
+        for name, command in Command._commands.items():
+            name = name + ":"
+            Print(f"  {name:{c_len}s}{command.description()}")
+        Print()
+        Print(f"For help use: {program} <command> --help.")
+        exit(1)
