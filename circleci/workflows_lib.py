@@ -293,8 +293,6 @@ class FetchDetails(CircleCiCommand):
                     if k not in d or not d[k]:
                         d[k] = details.get(k, "")
                 data[row["id"]] = d
-                if len(data) > 60:
-                    break
         if self.args.progress:
             Log()
         Log(f"Read {len(data)} details.")
