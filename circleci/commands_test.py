@@ -15,32 +15,70 @@
 
 """Tests for commands.py."""
 
+import io
+import sys
 import unittest
+from contextlib import redirect_stdout
+from unittest.mock import patch
 
-from circleci.commands import SnakeCase
+from parameterized import parameterized
+
+from circleci.commands import Command, Print, SnakeCase
+
+
+class HelloDear(Command):
+    """Hello Dear test command."""
+
+    def __init__(self):
+        super(HelloDear, self).__init__()
+        self.parser.add_argument("name", nargs="?")
+
+    def Main(self):
+        print(
+            f"Hello, dear{' ' if self.args.name else ''}{self.args.name}.", flush=True
+        )
 
 
 class Test(unittest.TestCase):
-    def test_snake_case(self):
-        self.assertEqual(SnakeCase(""), "")
-        self.assertEqual(SnakeCase("-"), "")
-        self.assertEqual(SnakeCase("---"), "")
-        self.assertEqual(SnakeCase("Ab"), "ab")
-        self.assertEqual(SnakeCase("aB"), "a_b")
-        self.assertEqual(SnakeCase("AB"), "ab")
-        self.assertEqual(SnakeCase("ABC"), "abc")
-        self.assertEqual(SnakeCase("AbC"), "ab_c")
-        self.assertEqual(SnakeCase("ABcD"), "abc_d")
-        self.assertEqual(SnakeCase("aBCD"), "a_bcd")
-        self.assertEqual(SnakeCase("aBCdE"), "a_bcd_e")
-        self.assertEqual(SnakeCase("aB.CD"), "a_b._cd")
-        self.assertEqual(SnakeCase("aB-CD"), "a_b_cd")
-        self.assertEqual(SnakeCase("FooBar"), "foo_bar")
-        self.assertEqual(SnakeCase("Foo_Bar"), "foo_bar")
-        self.assertEqual(SnakeCase("Foo__Bar"), "foo_bar")
-        self.assertEqual(SnakeCase("Foo___Bar"), "foo_bar")
-        self.assertEqual(SnakeCase("_"), "_")
-        self.assertEqual(SnakeCase("_FooBar_"), "_foo_bar_")
+    @parameterized.expand(
+        [
+            ("", ""),
+            ("-", ""),
+            ("---", ""),
+            ("Ab", "ab"),
+            ("aB", "a_b"),
+            ("AB", "ab"),
+            ("ABC", "abc"),
+            ("AbC", "ab_c"),
+            ("ABcD", "abc_d"),
+            ("aBCD", "a_bcd"),
+            ("aBCdE", "a_bcd_e"),
+            ("aB.CD", "a_b._cd"),
+            ("aB-CD", "a_b_cd"),
+            ("FooBar", "foo_bar"),
+            ("Foo_Bar", "foo_bar"),
+            ("Foo__Bar", "foo_bar"),
+            ("Foo___Bar", "foo_bar"),
+            ("_", "_"),
+            ("_FooBar_", "_foo_bar_"),
+        ]
+    )
+    def test_snake_case(self, text: str, expected):
+        self.assertEqual(expected, SnakeCase(text))
+
+    @parameterized.expand(
+        [
+            ([], "Hello, dearNone.\n"),
+            ([""], "Hello, dear.\n"),
+            (["me"], "Hello, dear me.\n"),
+        ]
+    )
+    def test_hello_dear(self, argv: list[str], expected: str):
+        self.assertIn("hello_dear", Command._commands)
+        capture = io.StringIO()
+        with redirect_stdout(capture):
+            Command.Run(["program", "hello_dear"] + argv)
+            self.assertEqual(expected, capture.getvalue())
 
 
 if __name__ == "__main__":
