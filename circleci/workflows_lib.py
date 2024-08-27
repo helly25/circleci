@@ -128,11 +128,11 @@ class CircleCiCommand(Command):
         )
 
 
-class Branches(CircleCiCommand):
+class RequestBranches(CircleCiCommand):
     """Read and display the list of branches for `workflow` from CircleCI API."""
 
     def __init__(self):
-        super(Branches, self).__init__()
+        super(RequestBranches, self).__init__()
         self.parser.add_argument(
             "--workflow",
             default="default_workflow",
@@ -147,15 +147,31 @@ class Branches(CircleCiCommand):
             Print(branch)
 
 
-class Workflows(CircleCiCommand):
-    """Read and display the list of workflows from CircleCI API."""
+class RequestWorkflows(CircleCiCommand):
+    """Read and display the list of workflow names from CircleCI API."""
 
     def __init__(self):
-        super(Workflows, self).__init__()
+        super(RequestWorkflows, self).__init__()
 
     def Main(self):
         for workflow in self.circleci.RequestWorkflows():
             Print(workflow)
+
+
+class RequestWorkflow(CircleCiCommand):
+    """Given a workflow ID return its details."""
+
+    def __init__(self):
+        super(RequestWorkflow, self).__init__()
+        self.parser.add_argument(
+            "--workflow_id",
+            type=str,
+            help="Workflow ID to request.",
+        )
+
+    def Main(self) -> None:
+        Log(f"Request workflow {self.args.workflow_id}...")
+        Print(self.circleci.RequestWorkflowDetails(workflow_id=self.args.workflow_id))
 
 
 class Fetch(CircleCiCommand):
@@ -284,7 +300,7 @@ class FetchDetails(CircleCiCommand):
                     elif not index % 20:
                         Log(".", end="")
                 details: dict[str, str] = self.circleci.RequestWorkflowDetails(
-                    workflow=row["id"]
+                    workflow_id=row["id"]
                 )
                 d: dict[str, str] = {
                     k: v for k, v in row.items() if k in FETCH_WORKFLOW_DETAIL_KEYS

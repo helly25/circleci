@@ -12,12 +12,24 @@ repos:
       - id: requirements-txt-fixer
       - id: trailing-whitespace
 
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
+  - repo: https://github.com/keith/pre-commit-buildifier
+    rev: 6.1.0
     hooks:
-      - id: black
-
+      - id: buildifier
+        args: &args
+          # Keep this argument in sync with .bazelci/presubmit.yaml
+          - --warnings=all
+      - id: buildifier-lint
+        args: *args
   - repo: https://github.com/pycqa/isort
     rev: 5.13.2
     hooks:
       - id: isort
+        name: isort (python)
+        args:
+          - --profile
+          - black
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black

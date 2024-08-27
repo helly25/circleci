@@ -36,12 +36,13 @@ class WorkflowsTest(unittest.TestCase):
         self.assertTrue(
             set(Command._commands.keys()).issuperset(
                 {
-                    "branches",
                     "combine",
                     "fetch_details",
                     "fetch",
                     "filter",
-                    "workflows",
+                    "request_branches",
+                    "request_workflow",
+                    "request_workflows",
                 }
             )
         )
@@ -67,7 +68,7 @@ class WorkflowsTest(unittest.TestCase):
                             "circleci.workflows_lib.CircleCiCommand._InitCircleCiClient",
                             return_value=mock_client,
                         ) as mock_init:
-                            Command.Run(["program", "branches"])
+                            Command.Run(["program", "request_branches"])
         self.assertEqual("b1\nb2\n", capture.getvalue())
 
 

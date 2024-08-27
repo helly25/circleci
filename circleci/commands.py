@@ -203,7 +203,10 @@ class Command(ABC):
             Command.Help(program)
         argv = [argv[0]] + argv[2:]
         command.Prepare(argv)
-        command.Main()
+        try:
+            command.Main()
+        except Exception as err:
+            Die(err)
 
     @staticmethod
     def Help(program: str):
@@ -216,7 +219,7 @@ class Command(ABC):
         Print()
         Print("Commands:")
         c_len = 3 + max([len(c) for c in Command._commands.keys()])
-        for name, command in Command._commands.items():
+        for name, command in sorted(Command._commands.items()):
             name = name + ":"
             Print(f"  {name:{c_len}s}{command.description()}")
         Print()

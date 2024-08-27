@@ -14,3 +14,17 @@
 # limitations under the License.
 
 """Main module."""
+
+load("@rules_python//python:pip.bzl", "compile_pip_requirements")
+
+exports_files([
+    "mypy.ini",
+    "requests.txt",
+])
+
+compile_pip_requirements(
+    name = "requirements",
+    src = "requirements.in",
+    requirements_txt = "requirements_lock.txt",
+    tags = ["no-mypy"],
+)

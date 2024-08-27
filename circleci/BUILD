@@ -16,12 +16,17 @@
 """Tool to fetch and analyze CircleCI workflows."""
 
 load("@my_pip_deps//:requirements.bzl", "requirement")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 
 package(default_visibility = ["//visibility:private"])
 
 py_library(
     name = "circleci_api_v2_py",
     srcs = ["circleci_api_v2.py"],
+    deps = [
+        requirement("requests"),
+        requirement("responses"),
+    ],
 )
 
 py_test(
@@ -30,6 +35,7 @@ py_test(
     deps = [
         ":circleci_api_v2_py",
         requirement("parameterized"),
+        requirement("requests"),
     ],
 )
 
@@ -69,11 +75,11 @@ py_test(
 
 py_binary(
     name = "workflows",
+    testonly = True,
     srcs = ["workflows.py"],
+    tags = ["manual"],
     deps = [
         ":commands_py",
         ":workflows_lib_py",
     ],
-    testonly = True,
-    tags = ["manual"],
 )

@@ -15,10 +15,34 @@
 
 """A simple CircleCI V2 API client."""
 
-import http.client
-import json
 from datetime import datetime
 from typing import Any
+
+import requests
+
+
+class CircleCiError(Exception):
+    """Based exception for all Exceptions raied by the client."""
+
+    pass
+
+
+class CircleCiRequestError(CircleCiError):
+    """Exception raised by client if the request fails."""
+
+    pass
+
+
+class CircleCiApiError(CircleCiError):
+    """Exception raised by the client if the Api reports an error."""
+
+    pass
+
+
+class CircleCiDataError(CircleCiError):
+    """Exception raied by the client if there is a data error (e.g. JSON decoding failed)."""
+
+    pass
 
 
 class CircleCiApiV2:
@@ -28,28 +52,41 @@ class CircleCiApiV2:
     """
 
     def __init__(self, circleci_server: str, circleci_token: str, project_slug: str):
-        self.circleci_server = circleci_server.rstrip(".")
+        if not circleci_server.startswith(("https://", "http://")):
+            circleci_server = "https://" + circleci_server
+        self.circleci_server = circleci_server
         self.circleci_token = circleci_token
         self.project_slug = project_slug
-        if self.circleci_server != "__test__":
-            self.conn = http.client.HTTPSConnection("circleci.com")
 
-    def _GetRequest(self, url: str, headers: dict[str, str] = {}) -> str:
-        self.conn.request("GET", url, headers=headers)
-        return self.conn.getresponse().read().decode("utf-8")
-
-    def _Request(self, api: str, params: dict[str, str] = {}) -> Any:
+    def _GetRequestJson(self, api: str, params: dict[str, str] = {}) -> Any:
         headers = {
             "Circle-Token": self.circleci_token,  # authorization
         }
-        parms = "&".join([k + "=" + v for k, v in params.items()])
-        url = f"{self.circleci_server}/{api}?{parms}"
-        data: str = self._GetRequest(url=url, headers=headers)
-        return json.loads(data)
+        url = f"{self.circleci_server}/{api}"
+        if params:
+            url += "?" + "&".join([k + "=" + v for k, v in params.items()])
+        try:
+            response = requests.get(url=url, headers=headers)
+        except Exception as err:
+            raise CircleCiRequestError(f"CircleCI Request Error: '{err}'")
+        if response.status_code != 200:
+            raise CircleCiRequestError(
+                f"CirecleCI Request Error: Bad reponse {response.status_code}: {response.reason}"
+            )
+        error_message_prefix = '{:message "'
+        if str(response.text).startswith(error_message_prefix):
+            error = response.text.lstrip(error_message_prefix).rstrip('"}')
+            raise CircleCiApiError(f"CircleCI API Error: '{error}'")
+        try:
+            return response.json()
+        except Exception as err:
+            raise CircleCiDataError(
+                f"CircleCI Data Error: {err}: data='{response.text}'"
+            )
 
     def RequestBranches(self, workflow: str) -> list[str]:
         """Returns a list of branches for the given `workflow`."""
-        data = self._Request(
+        data = self._GetRequestJson(
             api=f"api/v2/insights/{self.project_slug}/branches",
             params={"workflow-name": workflow},
         )
@@ -57,23 +94,22 @@ class CircleCiApiV2:
 
     def RequestWorkflows(self) -> list[str]:
         """Returns a list of workflows."""
+        # TODO(helly25): Should this do something with `item["project_id"]`?
         workflows: set[str] = set()
         requests = 0
         params: dict[str, str] = {
             "all-branches": "True",
             "reporting-window": "last-90-days",
         }
-        projects: set[str] = set()
         while 1:
             requests += 1
-            data: Any = self._Request(
+            data: Any = self._GetRequestJson(
                 api=f"api/v2/insights/{self.project_slug}/workflows", params=params
             )
-            items: list[dict[str, str]] = data["items"]
+            items: list[dict[str, Any]] = data["items"]
             for item in items:
-                workflows.add(item["name"])
-                projects.add(item["project_id"])
-            next_page_token: str = data.get("next_page_token", "")
+                workflows.add(str(item["name"]))
+            next_page_token = str(data.get("next_page_token", ""))
             if not next_page_token:
                 break
             params["page-token"] = next_page_token
@@ -87,22 +123,32 @@ class CircleCiApiV2:
         requests = 0
         while 1:
             requests += 1
-            data = self._Request(
+            data = self._GetRequestJson(
                 api=f"api/v2/insights/{self.project_slug}/workflows/{workflow}",
                 params=params,
             )
             next_items = data.get("items")
             if next_items:
-                items.extend(next_items)
-            next_page_token = data.get("next_page_token", "")
+                for item in next_items:
+                    next_item: dict[str, str] = {}
+                    for k in item.keys():
+                        next_item[k] = str(item[k])
+                    items.append(next_item)
+            next_page_token = str(data.get("next_page_token", ""))
             if not next_page_token:
                 break
             params["page-token"] = next_page_token
         return items
 
-    def RequestWorkflowDetails(self, workflow: str) -> dict[str, str]:
-        """Returns deaults for the given `workflow`."""
-        return self._Request(api=f"api/v2/workflow/{workflow}")
+    def RequestWorkflowDetails(self, workflow_id: str) -> dict[str, str]:
+        """Returns details for the given `workflow`."""
+        data = self._GetRequestJson(api=f"api/v2/workflow/{workflow_id}")
+        if not data:
+            return {}
+        result: dict[str, str] = {}
+        for k, v in data.items():
+            result[str(k)] = str(v)
+        return result
 
     def ParseTime(self, dt: str) -> datetime:
         if dt.endswith("Z") and dt[len(dt) - 2] in "0123456789":
