@@ -17,23 +17,34 @@
 
 module(
     name = "circleci",
-    repo_name = "com_helly25_circleci",
     version = "0.0.0",
+    repo_name = "com_helly25_circleci",
 )
 
 _PYTHON_VERSION = "3.12"
 
-bazel_dep(name = "rules_python", version = "0.34.0")
+_PYTHON_VERSION_SNAKE = _PYTHON_VERSION.replace(".", "_")
+
 bazel_dep(name = "bazel_skylib", version = "1.6.1")
+bazel_dep(name = "rules_python", version = "0.34.0")
+bazel_dep(name = "rules_mypy", version = "0.6.0")
+
 bazel_dep(name = "buildifier_prebuilt", version = "6.4.0", dev_dependency = True)
-bazel_dep(name = "rules_mypy", version = "0.5.0")
 
 python = use_extension(
     "@rules_python//python/extensions:python.bzl",
     "python",
     dev_dependency = True,
 )
-python.toolchain(python_version = _PYTHON_VERSION)
+python.toolchain(
+    is_default = True,
+    python_version = _PYTHON_VERSION,
+)
+use_repo(
+    python,
+    "python_" + _PYTHON_VERSION_SNAKE,
+    "python_versions",
+)
 
 pip = use_extension(
     "@rules_python//python/extensions:pip.bzl",
@@ -41,9 +52,11 @@ pip = use_extension(
     dev_dependency = True,
 )
 pip.parse(
+    enable_implicit_namespace_pkgs = True,
+    experimental_index_url = "https://pypi.org/simple",
     hub_name = "my_pip_deps",
     python_version = _PYTHON_VERSION,
-    requirements_lock = "//:requirements.txt",
+    requirements_lock = "//:requirements_lock.txt",
 )
 use_repo(pip, "my_pip_deps")
 
@@ -51,6 +64,6 @@ types = use_extension("@rules_mypy//mypy:types.bzl", "types")
 types.requirements(
     name = "pip_types",
     pip_requirements = "@my_pip_deps//:requirements.bzl",
-    requirements_txt = "//:requirements.txt",
+    requirements_txt = "//:requirements.in",
 )
 use_repo(types, "pip_types")
