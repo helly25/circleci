@@ -15,8 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""A simple CircleCI client that fetches workflow stats from the CircleCI API
-server and writes them as a CSV file.
+"""A simple [CircleCI API](https://circleci.com) client that fetches workflow
+stats from the CircleCI API server and writes them as a CSV file.
+
+Most file based parameters transparently support gzip and bz2 compression when
+they have a '.gz' or '.bz2' extension respectively.
 """
 
 import circleci.workflows_lib
