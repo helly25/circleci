@@ -51,6 +51,7 @@ import io
 import re
 import sys
 from abc import ABC, abstractmethod
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Type, cast
 
@@ -121,6 +122,32 @@ def SnakeCase(text: str) -> str:
     return re.sub("_+", "_", text).lower()
 
 
+def DocOutdent(text: str) -> str:
+    if not text:
+        return text
+    result = []
+    lines = text.strip("\n").rstrip().split("\n")
+    if text.startswith("\n") and not lines[0].startswith(" "):
+        result.append("XXX" + lines[0])
+        lines.pop(0)
+    max_indent = -1
+    for line in lines:
+        if line:
+            indent = len(line) - len(line.lstrip())
+            if indent and (max_indent == -1 or indent < max_indent):
+                max_indent = indent
+    if max_indent < 1:
+        result.extend(lines)
+    else:
+        prefix = " " * max_indent
+        for line in lines:
+            if line.startswith(prefix):
+                result.append(line.removeprefix(prefix))
+            else:
+                result.append(line)
+    return "\n".join(result)
+
+
 class Command(ABC):
     """Abstract base class to implement programs with sub-commands.
 
@@ -165,7 +192,7 @@ class Command(ABC):
 
     @classmethod
     def description(cls):
-        return cls.__doc__
+        return DocOutdent(cls.__doc__)
 
     def Prepare(self, argv: list[str]) -> None:
         """Prepare the command for execution by parsing the arguments in `argv`.
@@ -185,14 +212,7 @@ class Command(ABC):
 
     @staticmethod
     def Run(argv: list[str] = sys.argv):
-        program = argv[0] if argv else "-"
         command_name = argv[1] if len(argv) > 1 else ""
-        match = re.fullmatch(
-            "(?:.*/)?bazel-out/.*/bin/.*[.]runfiles/(?:__main__|_main)/(.*)/([^/]+)[.]py",
-            program,
-        )
-        if match:
-            program = f"bazel run //{match.group(1)}:{match.group(2)} --"
         if not Command._commands:
             Die("No Commands were implemented.")
         if command_name in Command._commands.keys():
@@ -200,7 +220,7 @@ class Command(ABC):
         else:
             command = None
         if len(argv) < 2 or not command:
-            Command.Help(program)
+            command = Command._commands["help"]()
         argv = [argv[0]] + argv[2:]
         command.Prepare(argv)
         try:
@@ -208,20 +228,111 @@ class Command(ABC):
         except Exception as err:
             Die(err)
 
-    @staticmethod
-    def Help(program: str):
-        Print(f"Usage:\n  {program} <command> [args...]")
-        Print()
-        Print(
-            "Most file based parameters transparently support gzip and bz2 compression when "
-            "they have a '.gz' or '.bz2' extension respectively."
+
+class HelpOutputMode(Enum):
+    TEXT = "text"
+    MARKDOWN = "markdown"
+
+
+class Help(Command):
+    """Provides help for the program."""
+
+    def __init__(self):
+        super(Help, self).__init__()
+        self.parser.add_argument(
+            "--mode",
+            type=HelpOutputMode,
+            default=HelpOutputMode.TEXT,
+            help="The output mode for printing help.",
         )
-        Print()
-        Print("Commands:")
+        self.parser.add_argument(
+            "--all_commands",
+            action="store_true",
+            help="Whether to show all commands",
+        )
+        self.parser.add_argument(
+            "--prefix",
+            type=Path,
+            default="",
+            help="A file that should be used as a prefix on output.",
+        )
+
+    def Prepare(self, argv: list[str]) -> None:
+        super(Help, self).Prepare(argv)
+        self.program = argv[0] if argv else "-"
+        match = re.fullmatch(
+            "(?:.*/)?bazel-out/.*/bin/.*[.]runfiles/(?:__main__|_main)/(.*)/([^/]+)[.]py",
+            self.program,
+        )
+        if match:
+            self.program = f"bazel run //{match.group(1)}:{match.group(2)} --"
+
+    def Print(self, text: str = ""):
+        if self.args.mode == HelpOutputMode.TEXT:
+            # In text mode replace replace images and links with their targets.
+            img_re = re.compile(r"\[!\[([^\]]+)\]\([^\)]+\)\]\(([^\)]+)\)")
+            lnk_re = re.compile(r"\[!?([^\]]+)\]\([^\)]+\)")
+            while True:
+                (text, n_img) = img_re.subn("\\1 (\\2)", text)
+                (text, n_lnk) = lnk_re.subn("\\1", text)
+                if not n_img and not n_lnk:
+                    break
+        globals()["Print"](text)
+
+    def H1(self, text: str):
+        if self.args.mode == HelpOutputMode.MARKDOWN:
+            self.Print(f"# {text.rstrip(':')}")
+        else:
+            self.Print(f"{text}\n")
+
+    def H2(self, text: str):
+        if self.args.mode == HelpOutputMode.MARKDOWN:
+            self.Print(f"## {text.rstrip(':')}")
+        else:
+            self.Print(f"{text}\n")
+
+    def Code(self, text: str):
+        if self.args.mode == HelpOutputMode.MARKDOWN:
+            self.Print(f"```\n{text}\n```")
+        else:
+            self.Print(f"  {text}")
+
+    def ListItem(self, text: str):
+        if self.args.mode == HelpOutputMode.MARKDOWN:
+            self.Print(f"* {text}")
+        else:
+            self.Print(f"  {text}")
+
+    def Main(self) -> None:
+        if self.args.prefix:
+            self.Print(self.args.prefix.open("rt").read())
+        first_line, program_doc = DocOutdent(
+            str(sys.modules["__main__"].__doc__).strip()
+        ).split("\n\n", 1)
+        if first_line:
+            self.Print(first_line)
+            self.Print()
+        self.H1(f"Usage:")
+        self.Code(f"{self.program} <command> [args...]")
+        self.Print()
+        self.H2("Commands:")
         c_len = 3 + max([len(c) for c in Command._commands.keys()])
         for name, command in sorted(Command._commands.items()):
             name = name + ":"
-            Print(f"  {name:{c_len}s}{command.description()}")
-        Print()
-        Print(f"For help use: {program} <command> --help.")
+            description = command.description().split("\n\n")[0]
+            self.ListItem(f"{name:{c_len}s}{description}")
+        self.Print()
+        if program_doc:
+            self.Print(program_doc)
+            self.Print()
+        self.H2(f"For command specific help use:")
+        self.Code(f"{self.program} <command> --help.")
+        if self.args.all_commands:
+            for name, command in sorted(Command._commands.items()):
+                if command.description().find("\n\n") == -1:
+                    continue
+                self.Print()
+                self.H2(f"Command {name}")
+                self.Print()
+                self.Print(command.description())
         exit(1)
