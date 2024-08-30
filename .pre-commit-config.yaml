@@ -33,3 +33,45 @@ repos:
     rev: 24.8.0
     hooks:
       - id: black
+
+  - repo: local
+    hooks:
+      - id: no-do-not-merge
+        name: No 'DO NOT MERGE'
+        description: |
+          * You can add 'DONOTMERGE', 'DONOTSUBMIT', 'DO NOT MERGE', 'DO NOT SUBMIT', 'DON'T MERGE',
+            'DON'T SUBMIT' or the same with underscores instead of spaces to prevent merging.
+        language: pygrep
+        args: [-i]
+        entry: DO([ _]?NOT|N'T)[ _]?(SUBMIT|MERGE)
+        exclude: ^.pre-commit-config.yaml$
+        types: [text]
+
+      - id: no-todos-without-context
+        name: No TODOs without context
+        description: |
+          * Use descriptive, referenceable TODOs. Examples:
+            * `// TODO(nero.windstriker)`
+            * `# FIXME(https://github.com/helly25/circleci/issues/1)`
+          * From the google style guide:
+            Use TODO comments for code that is temporary, a short-term solution, or good-enough but
+            not perfect. TODOs should include the string TODO in all caps, followed by the bug ID,
+            name, e-mail address, or other identifier of the person or issue with the best context
+            about the problem referenced by the TODO.
+          * A bug or other URL reference is better than a person, as the person may leave the team.
+          * A developer can be identified by their email addresses or just by their name without the
+            @-part.
+            * If a developer is referenced then it does not need to be the one writing the TODO.
+            * It is more important to note the most knowledgable person.
+            * If you add someone else, first clarify with them that they are the right person.
+          * Concretely, TODOs and FIXMEs without a context are rather pointless. That is, sooner or
+            later noone knows why they were introduced and they will simply get deleted. Or they
+            stay in place along with an endless larger list of them resulting in all of them being
+            ignored immediately.
+          * It is impossible to systematically find your own TODOs, someone else' or perform any
+            other kind of statictics on them. The issue is that the blame tool tracks the last
+            change, so you would need a tool that can follow the history to the actual introduction
+            of the TODOs.
+        language: pygrep
+        entry: (#|//|/[*]).*(FIXM[E]|TOD[O])\b(?![(](((\w|\w[.-]\w)+(@github.com)?)|(https?://[^)]+))(,[^)]+)?[)])
+        types: [text]

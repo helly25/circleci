@@ -22,7 +22,7 @@ from contextlib import redirect_stdout
 
 from parameterized import parameterized
 
-from circleci.commands import Command, Print, SnakeCase
+from mbo.app.commands import Command, Print, SnakeCase
 
 
 class HelloDear(Command):

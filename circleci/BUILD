@@ -40,25 +40,14 @@ py_test(
 )
 
 py_library(
-    name = "commands_py",
-    srcs = ["commands.py"],
-)
-
-py_test(
-    name = "commands_test",
-    srcs = ["commands_test.py"],
-    deps = [
-        ":commands_py",
-        requirement("parameterized"),
-    ],
-)
-
-py_library(
     name = "workflows_lib_py",
     srcs = ["workflows_lib.py"],
     deps = [
         ":circleci_api_v2_py",
-        ":commands_py",
+        "//mbo/app:commands_py",
+        "//mbo/app:flags_py",
+        requirement("humanize"),
+        requirement("pytimeparse"),
     ],
 )
 
@@ -67,8 +56,8 @@ py_test(
     srcs = ["workflows_lib_test.py"],
     deps = [
         ":circleci_api_v2_py",
-        ":commands_py",
         ":workflows_lib_py",
+        "//mbo/app:commands_py",
         requirement("parameterized"),
     ],
 )
@@ -79,7 +68,7 @@ py_binary(
     srcs = ["workflows.py"],
     tags = ["manual"],
     deps = [
-        ":commands_py",
         ":workflows_lib_py",
+        "//mbo/app:commands_py",
     ],
 )
