@@ -85,7 +85,6 @@ input
       Whether to indicate progress (defaults to True if
       `--fetch_workflow_details` is active).
 
-
 ## Command fetch
 
 Fetch workflow data from the CircleCI API server and writes them as a CSV
@@ -177,7 +176,6 @@ bazel run //circleci:workflows -- fetch --output "${PWD}/data/circleci_workflows
 
       Whether workflow details should automatically be added.
 
-
 ## Command fetch_details
 
 Given a workflow CSV file, fetch details for each workflow (slow).
@@ -225,7 +223,6 @@ bazel run //circleci:workflows -- fetch_details --input "${PWD}/data/circleci_wo
 --progress, --no-progress
 
       Whether to indicate progress.
-
 
 ## Command filter
 
@@ -285,7 +282,6 @@ bazel run //circleci:workflows -- filter --workflow default_workflow,pre_merge -
       Accept only the listed days of the week as indexed 1=Monday through
       7=Sunday (ISO notation).
 
-
 ## Command request_branches
 
 Read and display the list of branches for `workflow` from CircleCI API.
@@ -330,7 +326,6 @@ bazel run //circleci:workflows -- request_branches
       The name of the workflow to read. Multiple workflows can be read by
       separating with comma.
 
-
 ## Command request_workflow
 
 Given a workflow ID return its details.
@@ -370,7 +365,6 @@ bazel run //circleci:workflows -- request_workflow --workflow_id <ID>
 --workflow_id WORKFLOW_ID
 
       Workflow ID to request.
-
 
 ## Command request_workflows
 

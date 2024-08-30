@@ -382,13 +382,17 @@ class Help(Command):
         # Then loop over the lines and if there are empty lines count them.
         # For non empty lines print at most two empty lines if some empty lines
         # preceeded.
-        self.esequential_mpty_lines = min(2, self.esequential_mpty_lines)
+        max_empty_lines = 1
+        self.esequential_mpty_lines = min(max_empty_lines, self.esequential_mpty_lines)
         text = "\n" * self.esequential_mpty_lines + text
         self.esequential_mpty_lines = 0
         for t in text.split("\n"):
             if t.count(" ") == len(t):
                 t = ""
-                self.esequential_mpty_lines = min(self.esequential_mpty_lines + 1, 2)
+            if not t:
+                self.esequential_mpty_lines = min(
+                    max_empty_lines, self.esequential_mpty_lines + 1
+                )
             else:
                 while self.esequential_mpty_lines > 0:
                     globals()["Print"]("")
