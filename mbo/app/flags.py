@@ -17,17 +17,11 @@
 
 import argparse
 import collections
-import re
-import sys
 from datetime import datetime, time, timedelta, timezone, tzinfo
 from enum import Enum
 from typing import Any, Callable, Iterable, Optional, cast
 
 from pytimeparse.timeparse import timeparse
-
-
-def _Log(message=Any):
-    print(message, flush=True, file=sys.stderr)
 
 
 class EnumAction(argparse.Action):
@@ -178,17 +172,10 @@ def _ParseDateTime(
     if value is datetime:
         return _MaybeMidnight(cast(datetime, value), midnight=midnight, tz=tz)
     v = str(value)
-    if re.fullmatch("[0-9]{8}", v):
-        try:
-            return datetime(
-                year=int(v[0:4]),
-                month=int(v[4:6]),
-                day=int(v[6:8]),
-                tzinfo=tz,
-            )
-        except ValueError as err:
-            raise ValueError(f"Invalid date string: '{v}', {err}")
-    return _MaybeMidnight(datetime.fromisoformat(v), midnight=midnight, tz=tz)
+    try:
+        return _MaybeMidnight(datetime.fromisoformat(v), midnight=midnight, tz=tz)
+    except ValueError as err:
+        raise ValueError(f"Invalid date string: '{v}', {err}")
 
 
 def ParseDateTimeOrTimeDelta(
