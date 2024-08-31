@@ -37,7 +37,11 @@ import humanize
 
 from circleci.circleci_api_v2 import CircleCiApiV2, CircleCiApiV2Opts, LogRequestDetail
 from mbo.app.commands import Command, Die, DocOutdent, Log, OpenTextFile, Print
-from mbo.app.flags import EnumListAction, ParseDateTimeOrDelta
+from mbo.app.flags import (
+    ActionDateTimeOrTimeDelta,
+    ActionEnumList,
+    ParseDateTimeOrTimeDelta,
+)
 
 # Keys used by the `fetch` command.
 # Instead of `created_at` and `stopped_at` we provide `created`/`created_unix`
@@ -73,6 +77,11 @@ FETCH_WORKFLOW_DETAIL_KEYS = FETCH_WORKFLOW_KEYS + FETCH_WORKFLOW_DETAIL_EXTRAS
 
 
 def TimeRangeStr(start: datetime, end: datetime) -> str:
+    if (start.tzinfo is None) != (end.tzinfo is None):
+        if start.tzinfo:
+            end = datetime.combine(end.date(), end.time(), tzinfo=start.tzinfo)
+        else:
+            start = datetime.combine(start.date(), start.time(), tzinfo=end.tzinfo)
     return f"Time range: [{start} .. {end}] ({humanize.precisedelta(end - start)})."
 
 
@@ -118,7 +127,7 @@ class CircleCiCommand(Command):
             type=LogRequestDetail,
             allow_empty=False,
             container_type=set,
-            action=EnumListAction,
+            action=ActionEnumList,
             help="Comma separated list of LogRequestDetails.",
         )
 
@@ -294,8 +303,8 @@ class Fetch(CircleCiCommand):
         )
         self.parser.add_argument(
             "--end",
-            default="",
-            type=str,
+            action=ActionDateTimeOrTimeDelta,
+            verify_only=True,
             help="""End (newest) date/time in Python [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)
                 format, e.g. `200241224` or as a negative time difference,
                 e.g. `-10days` (for details see [pytimeparse](https://github.com/wroberts/pytimeparse)).
@@ -306,7 +315,8 @@ class Fetch(CircleCiCommand):
         self.parser.add_argument(
             "--start",
             default="",
-            type=str,
+            action=ActionDateTimeOrTimeDelta,
+            verify_only=True,
             help="""Start (oldest) date/time in Python [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)
                 format, e.g. `200241224` or as a negative time difference,
                 e.g. `-10days` (for details see [pytimeparse](https://github.com/wroberts/pytimeparse)).
@@ -336,20 +346,17 @@ class Fetch(CircleCiCommand):
     def Main(self) -> None:
         if self.args.fetch_workflow_details and self.args.progress == None:
             self.args.progress = True
-        now = datetime.now()
-        now = datetime.combine(
-            now.date(), now.time(), tzinfo=now.tzinfo or timezone.utc
-        )
-        end = ParseDateTimeOrDelta(
-            arg=self.args.end,
+        now = datetime.now(timezone.utc)
+        end = ParseDateTimeOrTimeDelta(
+            value=self.args.end,
             midnight=self.args.midnight,
             default=now,
             reference=now,
             error_prefix="Bad flag `--end` value '",
             error_suffix="'.",
         )
-        start = ParseDateTimeOrDelta(
-            arg=self.args.start,
+        start = ParseDateTimeOrTimeDelta(
+            value=self.args.start,
             midnight=self.args.midnight,
             default=end - timedelta(days=90),
             reference=end,
@@ -362,14 +369,20 @@ class Fetch(CircleCiCommand):
             if self.args.midnight:
                 if self.args.start:
                     Log("Adjusting to midnight from 89 days ago.")
-                start = datetime.now() - timedelta(days=89)
+                start = datetime.now(timezone.utc) - timedelta(days=89)
                 start = datetime(
-                    start.year, start.month, start.day, tzinfo=start.tzinfo
+                    start.year,
+                    start.month,
+                    start.day,
+                    tzinfo=start.tzinfo or timezone.utc,
                 )
             else:
                 if self.args.start:
                     Log("Adjusting to 90 days ago.")
-                start = datetime.now() - timedelta(days=90)
+                start = datetime.now(timezone.utc) - timedelta(days=90)
+                start = datetime.combine(
+                    start.date(), start.time(), tzinfo=start.tzinfo or timezone.utc
+                )
         if start >= end:
             Die(f"Specified start time {start} must be before end time {end}!")
         Log(TimeRangeStr(start, end))

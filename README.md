@@ -40,50 +40,50 @@ bazel run //circleci:workflows -- combine --output=/tmp/circleci.csv "${PWD}/dat
 
 ### positional arguments:
 
-input
+`input`
 
-      List of CSV files generated from `workflow.py fetch`.
+> List of CSV files generated from `workflow.py fetch`.
 
 ### options:
 
--h, --help
+`-h, --help`
 
-      show this help message and exit
+> show this help message and exit
 
---circleci_server CIRCLECI_SERVER
+`--circleci_server CIRCLECI_SERVER`
 
-      The circleci server url including protocol (defaults to environment
-      variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
+> The circleci server url including protocol (defaults to environment
+> variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
 
---circleci_token CIRCLECI_TOKEN
+`--circleci_token CIRCLECI_TOKEN`
 
-      CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
+> CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
 
---circleci_project_slug CIRCLECI_PROJECT_SLUG
+`--circleci_project_slug CIRCLECI_PROJECT_SLUG`
 
-      CircleCI project-slug (defaults to environment variable
-      'CIRCLECI_PROJECT_SLUG').
+> CircleCI project-slug (defaults to environment variable
+> 'CIRCLECI_PROJECT_SLUG').
 
---log_requests_to_file LOG_REQUESTS_TO_FILE
+`--log_requests_to_file LOG_REQUESTS_TO_FILE`
 
-      Whether to log all requests for debugging purposes.
+> Whether to log all requests for debugging purposes.
 
---log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}
+`--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-      Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails.
 
---output OUTPUT
+`--output OUTPUT`
 
-      Name of the output file.
+> Name of the output file.
 
---fetch_workflow_details, --no-fetch_workflow_details
+`--fetch_workflow_details, --no-fetch_workflow_details`
 
-      Whether workflow details should automatically be added (if not present).
+> Whether workflow details should automatically be added (if not present).
 
---progress, --no-progress
+`--progress, --no-progress`
 
-      Whether to indicate progress (defaults to True if
-      `--fetch_workflow_details` is active).
+> Whether to indicate progress (defaults to True if
+> `--fetch_workflow_details` is active).
 
 ## Command fetch
 
@@ -110,71 +110,71 @@ bazel run //circleci:workflows -- fetch --output "${PWD}/data/circleci_workflows
 
 ### options:
 
--h, --help
+`-h, --help`
 
-      show this help message and exit
+> show this help message and exit
 
---circleci_server CIRCLECI_SERVER
+`--circleci_server CIRCLECI_SERVER`
 
-      The circleci server url including protocol (defaults to environment
-      variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
+> The circleci server url including protocol (defaults to environment
+> variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
 
---circleci_token CIRCLECI_TOKEN
+`--circleci_token CIRCLECI_TOKEN`
 
-      CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
+> CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
 
---circleci_project_slug CIRCLECI_PROJECT_SLUG
+`--circleci_project_slug CIRCLECI_PROJECT_SLUG`
 
-      CircleCI project-slug (defaults to environment variable
-      'CIRCLECI_PROJECT_SLUG').
+> CircleCI project-slug (defaults to environment variable
+> 'CIRCLECI_PROJECT_SLUG').
 
---log_requests_to_file LOG_REQUESTS_TO_FILE
+`--log_requests_to_file LOG_REQUESTS_TO_FILE`
 
-      Whether to log all requests for debugging purposes.
+> Whether to log all requests for debugging purposes.
 
---log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}
+`--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-      Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails.
 
---workflow WORKFLOW
+`--workflow WORKFLOW`
 
-      The name of the workflow(s) to read. Multiple workflows can be read by
-      separating with comma. If no workflow is set, then fetch all workflows.
+> The name of the workflow(s) to read. Multiple workflows can be read by
+> separating with comma. If no workflow is set, then fetch all workflows.
 
---output OUTPUT
+`--output OUTPUT`
 
-      Name of the output file.
+> Name of the output file.
 
---end END
+`--end END`
 
-      End (newest) date/time in Python [ISO
-      8601](https://en.wikipedia.org/wiki/ISO_8601) format, e.g. `200241224`
-      or as a negative time difference, e.g. `-10days` (for details see
-      [pytimeparse](https://github.com/wroberts/pytimeparse)).
+> End (newest) date/time in Python [ISO
+> 8601](https://en.wikipedia.org/wiki/ISO_8601) format, e.g. `200241224`
+> or as a negative time difference, e.g. `-10days` (for details see
+> [pytimeparse](https://github.com/wroberts/pytimeparse)).
+>
+> This defaults to `now`.
 
-      This defaults to `now`.
+`--start START`
 
---start START
+> Start (oldest) date/time in Python [ISO
+> 8601](https://en.wikipedia.org/wiki/ISO_8601) format, e.g. `200241224`
+> or as a negative time difference, e.g. `-10days` (for details see
+> [pytimeparse](https://github.com/wroberts/pytimeparse)).
+>
+> This defaults to `-90days` (or `-89days` if --midnight is active).
 
-      Start (oldest) date/time in Python [ISO
-      8601](https://en.wikipedia.org/wiki/ISO_8601) format, e.g. `200241224`
-      or as a negative time difference, e.g. `-10days` (for details see
-      [pytimeparse](https://github.com/wroberts/pytimeparse)).
+`--midnight, --no-midnight`
 
-      This defaults to `-90days` (or `-89days` if --midnight is active).
+> Adjust start and end date/time to midnight of the same day.
 
---midnight, --no-midnight
+`--progress, --no-progress`
 
-      Adjust start and end date/time to midnight of the same day.
+> Whether to indicate progress (defaults to True if
+> `--fetch_workflow_details` is active).
 
---progress, --no-progress
+`--fetch_workflow_details, --no-fetch_workflow_details`
 
-      Whether to indicate progress (defaults to True if
-      `--fetch_workflow_details` is active).
-
---fetch_workflow_details, --no-fetch_workflow_details
-
-      Whether workflow details should automatically be added.
+> Whether workflow details should automatically be added.
 
 ## Command fetch_details
 
@@ -186,43 +186,43 @@ bazel run //circleci:workflows -- fetch_details --input "${PWD}/data/circleci_wo
 
 ### options:
 
--h, --help
+`-h, --help`
 
-      show this help message and exit
+> show this help message and exit
 
---circleci_server CIRCLECI_SERVER
+`--circleci_server CIRCLECI_SERVER`
 
-      The circleci server url including protocol (defaults to environment
-      variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
+> The circleci server url including protocol (defaults to environment
+> variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
 
---circleci_token CIRCLECI_TOKEN
+`--circleci_token CIRCLECI_TOKEN`
 
-      CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
+> CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
 
---circleci_project_slug CIRCLECI_PROJECT_SLUG
+`--circleci_project_slug CIRCLECI_PROJECT_SLUG`
 
-      CircleCI project-slug (defaults to environment variable
-      'CIRCLECI_PROJECT_SLUG').
+> CircleCI project-slug (defaults to environment variable
+> 'CIRCLECI_PROJECT_SLUG').
 
---log_requests_to_file LOG_REQUESTS_TO_FILE
+`--log_requests_to_file LOG_REQUESTS_TO_FILE`
 
-      Whether to log all requests for debugging purposes.
+> Whether to log all requests for debugging purposes.
 
---log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}
+`--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-      Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails.
 
---input INPUT
+`--input INPUT`
 
-      A CSV file generated from `workflow.py fetch`.
+> A CSV file generated from `workflow.py fetch`.
 
---output OUTPUT
+`--output OUTPUT`
 
-      Name of the output file.
+> Name of the output file.
 
---progress, --no-progress
+`--progress, --no-progress`
 
-      Whether to indicate progress.
+> Whether to indicate progress.
 
 ## Command filter
 
@@ -234,53 +234,53 @@ bazel run //circleci:workflows -- filter --workflow default_workflow,pre_merge -
 
 ### options:
 
--h, --help
+`-h, --help`
 
-      show this help message and exit
+> show this help message and exit
 
---workflow WORKFLOW
+`--workflow WORKFLOW`
 
-      The name of the workflow(s) to accept. Multiple workflows can be userd
-      by separating with comma. If no workflow is set, then accept all
-      workflows.
+> The name of the workflow(s) to accept. Multiple workflows can be userd
+> by separating with comma. If no workflow is set, then accept all
+> workflows.
 
---input INPUT
+`--input INPUT`
 
-      CSV file generated from `workflow.py fetch`.
+> CSV file generated from `workflow.py fetch`.
 
---output OUTPUT
+`--output OUTPUT`
 
-      Name of the output file.
+> Name of the output file.
 
---min_duration_sec MIN_DURATION_SEC
+`--min_duration_sec MIN_DURATION_SEC`
 
-      Mininum duration to accept row in [sec].
+> Mininum duration to accept row in [sec].
 
---output_duration_as_mins, --no-output_duration_as_mins
+`--output_duration_as_mins, --no-output_duration_as_mins`
 
-      Whether to report duration values in minutes.
+> Whether to report duration values in minutes.
 
---exclude_branches EXCLUDE_BRANCHES
+`--exclude_branches EXCLUDE_BRANCHES`
 
-      Exclude branches by full regular expression match.
+> Exclude branches by full regular expression match.
 
---exclude_incomplete_reruns, --no-exclude_incomplete_reruns
+`--exclude_incomplete_reruns, --no-exclude_incomplete_reruns`
 
-      If workflow details are available, reject inomplete reruns (e.g.: rerun-
-      single-job, rerun-workflow-from-failed).
+> If workflow details are available, reject inomplete reruns (e.g.: rerun-
+> single-job, rerun-workflow-from-failed).
 
---only_branches ONLY_BRANCHES
+`--only_branches ONLY_BRANCHES`
 
-      Accept branches by full regular expression match.
+> Accept branches by full regular expression match.
 
---only_status ONLY_STATUS
+`--only_status ONLY_STATUS`
 
-      Accept only listed status values (multiple separated by comma).
+> Accept only listed status values (multiple separated by comma).
 
---only_weekdays ONLY_WEEKDAYS
+`--only_weekdays ONLY_WEEKDAYS`
 
-      Accept only the listed days of the week as indexed 1=Monday through
-      7=Sunday (ISO notation).
+> Accept only the listed days of the week as indexed 1=Monday through
+> 7=Sunday (ISO notation).
 
 ## Command request_branches
 
@@ -295,36 +295,36 @@ bazel run //circleci:workflows -- request_branches
 
 ### options:
 
--h, --help
+`-h, --help`
 
-      show this help message and exit
+> show this help message and exit
 
---circleci_server CIRCLECI_SERVER
+`--circleci_server CIRCLECI_SERVER`
 
-      The circleci server url including protocol (defaults to environment
-      variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
+> The circleci server url including protocol (defaults to environment
+> variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
 
---circleci_token CIRCLECI_TOKEN
+`--circleci_token CIRCLECI_TOKEN`
 
-      CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
+> CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
 
---circleci_project_slug CIRCLECI_PROJECT_SLUG
+`--circleci_project_slug CIRCLECI_PROJECT_SLUG`
 
-      CircleCI project-slug (defaults to environment variable
-      'CIRCLECI_PROJECT_SLUG').
+> CircleCI project-slug (defaults to environment variable
+> 'CIRCLECI_PROJECT_SLUG').
 
---log_requests_to_file LOG_REQUESTS_TO_FILE
+`--log_requests_to_file LOG_REQUESTS_TO_FILE`
 
-      Whether to log all requests for debugging purposes.
+> Whether to log all requests for debugging purposes.
 
---log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}
+`--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-      Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails.
 
---workflow WORKFLOW
+`--workflow WORKFLOW`
 
-      The name of the workflow to read. Multiple workflows can be read by
-      separating with comma.
+> The name of the workflow to read. Multiple workflows can be read by
+> separating with comma.
 
 ## Command request_workflow
 
@@ -336,35 +336,35 @@ bazel run //circleci:workflows -- request_workflow --workflow_id <ID>
 
 ### options:
 
--h, --help
+`-h, --help`
 
-      show this help message and exit
+> show this help message and exit
 
---circleci_server CIRCLECI_SERVER
+`--circleci_server CIRCLECI_SERVER`
 
-      The circleci server url including protocol (defaults to environment
-      variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
+> The circleci server url including protocol (defaults to environment
+> variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
 
---circleci_token CIRCLECI_TOKEN
+`--circleci_token CIRCLECI_TOKEN`
 
-      CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
+> CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
 
---circleci_project_slug CIRCLECI_PROJECT_SLUG
+`--circleci_project_slug CIRCLECI_PROJECT_SLUG`
 
-      CircleCI project-slug (defaults to environment variable
-      'CIRCLECI_PROJECT_SLUG').
+> CircleCI project-slug (defaults to environment variable
+> 'CIRCLECI_PROJECT_SLUG').
 
---log_requests_to_file LOG_REQUESTS_TO_FILE
+`--log_requests_to_file LOG_REQUESTS_TO_FILE`
 
-      Whether to log all requests for debugging purposes.
+> Whether to log all requests for debugging purposes.
 
---log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}
+`--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-      Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails.
 
---workflow_id WORKFLOW_ID
+`--workflow_id WORKFLOW_ID`
 
-      Workflow ID to request.
+> Workflow ID to request.
 
 ## Command request_workflows
 
@@ -376,28 +376,28 @@ bazel run //circleci:workflows -- request_workflows
 
 ### options:
 
--h, --help
+`-h, --help`
 
-      show this help message and exit
+> show this help message and exit
 
---circleci_server CIRCLECI_SERVER
+`--circleci_server CIRCLECI_SERVER`
 
-      The circleci server url including protocol (defaults to environment
-      variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
+> The circleci server url including protocol (defaults to environment
+> variable 'CIRCLECI_SERVER' which defaults to 'https://circleci.com').
 
---circleci_token CIRCLECI_TOKEN
+`--circleci_token CIRCLECI_TOKEN`
 
-      CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
+> CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')
 
---circleci_project_slug CIRCLECI_PROJECT_SLUG
+`--circleci_project_slug CIRCLECI_PROJECT_SLUG`
 
-      CircleCI project-slug (defaults to environment variable
-      'CIRCLECI_PROJECT_SLUG').
+> CircleCI project-slug (defaults to environment variable
+> 'CIRCLECI_PROJECT_SLUG').
 
---log_requests_to_file LOG_REQUESTS_TO_FILE
+`--log_requests_to_file LOG_REQUESTS_TO_FILE`
 
-      Whether to log all requests for debugging purposes.
+> Whether to log all requests for debugging purposes.
 
---log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}
+`--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-      Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails.

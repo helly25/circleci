@@ -18,7 +18,7 @@
 import argparse
 import unittest
 from dataclasses import dataclass, is_dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -30,7 +30,7 @@ import mbo.app.flags
 _NOW = "2024-08-28T14:15:16.123Z"
 
 
-def ActionArgs(name: str = "--flag", **kwargs) -> dict[str, Any]:
+def ActionArgs(name: str = "flag", **kwargs) -> dict[str, Any]:
     kwargs["name"] = name
     return kwargs
 
@@ -58,7 +58,7 @@ class FlagsTest(unittest.TestCase):
 
     @dataclass_as_param
     @dataclass(kw_only=True)
-    class ParseDateTimeOrDeltaTest:
+    class ParseDateTimeOrTimeDeltaTest:
         expected: str
         expected_error: type | None = None
         input: str
@@ -71,58 +71,58 @@ class FlagsTest(unittest.TestCase):
 
     @parameterized.expand(
         [
-            ParseDateTimeOrDeltaTest(
+            ParseDateTimeOrTimeDeltaTest(
                 expected="2024-04-02T14:00:00Z",
                 input="2024-04-02T14",
             ),
-            ParseDateTimeOrDeltaTest(
+            ParseDateTimeOrTimeDeltaTest(
                 expected="2024-04-02T01:02:03.004Z",
                 input="2024-04-02T01:02:03.004Z",
             ),
-            ParseDateTimeOrDeltaTest(
+            ParseDateTimeOrTimeDeltaTest(
                 expected="2024-04-02T00:00:00Z",
                 input="2024-04-02T13:14:15.123Z",
                 midnight=True,
             ),
-            ParseDateTimeOrDeltaTest(
+            ParseDateTimeOrTimeDeltaTest(
                 expected="2024-08-21T14:15:16.123Z",
                 input="-1w",
             ),
-            ParseDateTimeOrDeltaTest(
+            ParseDateTimeOrTimeDeltaTest(
                 expected="2024-08-29T14:15:16.123Z",
                 input="+1d",
             ),
-            ParseDateTimeOrDeltaTest(
+            ParseDateTimeOrTimeDeltaTest(
                 expected="2024-08-29T00:00:00Z",
                 input="+1d",
                 midnight=True,
             ),
-            ParseDateTimeOrDeltaTest(
+            ParseDateTimeOrTimeDeltaTest(
                 expected="2024-08-14 01:00:00Z",
                 input="+8h",
                 reference="2024-08-13 17",
                 midnight=False,
             ),
-            ParseDateTimeOrDeltaTest(
+            ParseDateTimeOrTimeDeltaTest(
                 expected="2024-08-14 00:00:00Z",
                 input="+8h",
                 reference="2024-08-13 17",
                 midnight=True,
             ),
-            ParseDateTimeOrDeltaTest(
+            ParseDateTimeOrTimeDeltaTest(
                 expected="2024-08-14 00:00:00Z",
                 input="+0s",
                 reference="2024-08-14 17",
                 midnight=True,
             ),
-            ParseDateTimeOrDeltaTest(
+            ParseDateTimeOrTimeDeltaTest(
                 expected="Bad timedelta value '+0 NOPE'.",
                 expected_error=ValueError,
                 input="+0 NOPE",
                 reference="2024-08-14 17",
                 midnight=True,
             ),
-            ParseDateTimeOrDeltaTest(
+            ParseDateTimeOrTimeDeltaTest(
                 expected="<prefix>+0 NOPE<suffix>",
                 expected_error=ValueError,
                 input="+0 NOPE",
@@ -133,7 +133,7 @@ class FlagsTest(unittest.TestCase):
             ),
         ]
     )
-    def test_ParseDateTimeOrDelta(self, test: ParseDateTimeOrDeltaTest):
+    def test_ParseDateTimeOrTimeDelta(self, test: ParseDateTimeOrTimeDeltaTest):
         with freeze_time(datetime.fromisoformat(test.now)):
             try:
                 self.assertEqual(
@@ -142,8 +142,8 @@ class FlagsTest(unittest.TestCase):
                         if not test.expected_error
                         else None
                     ),
-                    mbo.app.flags.ParseDateTimeOrDelta(
-                        arg=test.input,
+                    mbo.app.flags.ParseDateTimeOrTimeDelta(
+                        value=test.input,
                         midnight=test.midnight,
                         default=(
                             datetime.fromisoformat(test.default)
@@ -167,133 +167,17 @@ class FlagsTest(unittest.TestCase):
 
     @dataclass_as_param
     @dataclass(kw_only=True)
-    class EnumListActionTest:
+    class FlagTestData:
         test: str
         expected: Any
         expected_error: type | None = None
         action: dict[str, Any]
         input: list[str]
 
-    @parameterized.expand(
-        [
-            EnumListActionTest(
-                test="Set a single value to a list.",
-                expected=[TestEnum.ONE],
-                action=ActionArgs(
-                    type=TestEnum,
-                    action=mbo.app.flags.EnumListAction,
-                ),
-                input=["--flag=one"],
-            ),
-            EnumListActionTest(
-                test="Setting an empty vlaue requires `allow_empty=True`.",
-                expected="argument --flag: Empty value is not allowed, chose at least one of [FOR, ONE, TRE, TWO].",
-                expected_error=argparse.ArgumentError,
-                action=ActionArgs(
-                    type=TestEnum,
-                    default=[],
-                    action=mbo.app.flags.EnumListAction,
-                ),
-                input=["--flag="],
-            ),
-            EnumListActionTest(
-                test="Setting an empty vlaue requires `allow_empty=True` (not False).",
-                expected="argument --flag: Empty value is not allowed, chose at least one of [FOR, ONE, TRE, TWO].",
-                expected_error=argparse.ArgumentError,
-                action=ActionArgs(
-                    type=TestEnum,
-                    default=[],
-                    action=mbo.app.flags.EnumListAction,
-                    allow_empty=False,
-                ),
-                input=["--flag="],
-            ),
-            EnumListActionTest(
-                test="Setting an empty vlaue requires with `allow_empty=True` works.",
-                expected=[],
-                expected_error=argparse.ArgumentError,
-                action=ActionArgs(
-                    type=TestEnum,
-                    default=[],
-                    action=mbo.app.flags.EnumListAction,
-                    allow_empty=True,
-                ),
-                input=["--flag="],
-            ),
-            EnumListActionTest(
-                test="Default values work.",
-                expected=[TestEnum.TWO],
-                action=ActionArgs(
-                    type=TestEnum,
-                    default=[TestEnum.TWO],
-                    action=mbo.app.flags.EnumListAction,
-                ),
-                input=[],
-            ),
-            EnumListActionTest(
-                test="Default values work: They can even bypass the type.",
-                expected="Something else",
-                action=ActionArgs(
-                    type=TestEnum,
-                    default="Something else",
-                    action=mbo.app.flags.EnumListAction,
-                ),
-                input=[],
-            ),
-            EnumListActionTest(
-                test="Multile, possible repeated values and mixed case.",
-                expected=[TestEnum.TWO, TestEnum.ONE, TestEnum.TWO],
-                action=ActionArgs(
-                    type=TestEnum,
-                    action=mbo.app.flags.EnumListAction,
-                ),
-                input=["--flag=two,oNe,TWO"],
-            ),
-            EnumListActionTest(
-                test="Multile values in a set.",
-                expected=set([TestEnum.ONE, TestEnum.TWO]),
-                action=ActionArgs(
-                    type=TestEnum,
-                    container_type=set,
-                    action=mbo.app.flags.EnumListAction,
-                ),
-                input=["--flag=two,oNe,TWO"],
-            ),
-            EnumListActionTest(
-                test="Repeated flag for list.",
-                expected=[
-                    TestEnum.TWO,
-                    TestEnum.FOR,
-                    TestEnum.ONE,
-                    TestEnum.TRE,
-                    TestEnum.TWO,
-                ],
-                action=ActionArgs(
-                    "flag",
-                    nargs="+",
-                    type=TestEnum,
-                    action=mbo.app.flags.EnumListAction,
-                ),
-                input=["two,for", "one,tre", "TWO"],
-            ),
-            EnumListActionTest(
-                test="Repeated flag for list.",
-                expected={TestEnum.TWO, TestEnum.FOR, TestEnum.ONE, TestEnum.TRE},
-                action=ActionArgs(
-                    "flag",
-                    nargs="+",
-                    type=TestEnum,
-                    container_type=set,
-                    action=mbo.app.flags.EnumListAction,
-                ),
-                input=["two,for", "one,tre", "TWO"],
-            ),
-        ]
-    )
-    def test_EnumListAction(self, test: EnumListActionTest):
+    def FlagTest(self, test: FlagTestData) -> None:
         try:
             parser = argparse.ArgumentParser(exit_on_error=False)
-            name = test.action.pop("name", "--flag")
+            name = test.action.pop("name", "flag")
             parser.add_argument(name, **test.action)
             args = parser.parse_args(test.input)
             self.assertEqual(
@@ -310,6 +194,206 @@ class FlagsTest(unittest.TestCase):
                     test.expected_error,
                     "Bad error type in test: " + test.test,
                 )
+
+    @parameterized.expand(
+        [
+            FlagTestData(
+                test="Set a single value to a list.",
+                expected=[TestEnum.ONE],
+                action=ActionArgs(
+                    type=TestEnum,
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=["one"],
+            ),
+            FlagTestData(
+                test="Setting an empty vlaue requires `allow_empty=True`.",
+                expected="argument --flag: Empty value is not allowed, chose at least one of [FOR, ONE, TRE, TWO].",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    "--flag",
+                    type=TestEnum,
+                    default=[],
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=["--flag="],
+            ),
+            FlagTestData(
+                test="Setting an empty vlaue requires `allow_empty=True` (not False).",
+                expected="argument --flag: Empty value is not allowed, chose at least one of [FOR, ONE, TRE, TWO].",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    "--flag",
+                    type=TestEnum,
+                    default=[],
+                    action=mbo.app.flags.ActionEnumList,
+                    allow_empty=False,
+                ),
+                input=["--flag="],
+            ),
+            FlagTestData(
+                test="Setting an empty vlaue requires with `allow_empty=True` works.",
+                expected=[],
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    "--flag",
+                    type=TestEnum,
+                    default=[],
+                    action=mbo.app.flags.ActionEnumList,
+                    allow_empty=True,
+                ),
+                input=["--flag="],
+            ),
+            FlagTestData(
+                test="Default values work.",
+                expected=[TestEnum.TWO],
+                action=ActionArgs(
+                    "--flag",
+                    type=TestEnum,
+                    default=[TestEnum.TWO],
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=[],
+            ),
+            FlagTestData(
+                test="Default values work: They can even bypass the type.",
+                expected="Something else",
+                action=ActionArgs(
+                    "--flag",
+                    type=TestEnum,
+                    default="Something else",
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=[],
+            ),
+            FlagTestData(
+                test="Multile, possible repeated values and mixed case.",
+                expected=[TestEnum.TWO, TestEnum.ONE, TestEnum.TWO],
+                action=ActionArgs(
+                    type=TestEnum,
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=["two,oNe,TWO"],
+            ),
+            FlagTestData(
+                test="Multile values in a set.",
+                expected=set([TestEnum.ONE, TestEnum.TWO]),
+                action=ActionArgs(
+                    type=TestEnum,
+                    container_type=set,
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=["two,oNe,TWO"],
+            ),
+            FlagTestData(
+                test="Repeated flag for list.",
+                expected=[
+                    TestEnum.TWO,
+                    TestEnum.FOR,
+                    TestEnum.ONE,
+                    TestEnum.TRE,
+                    TestEnum.TWO,
+                ],
+                action=ActionArgs(
+                    nargs="+",
+                    type=TestEnum,
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=["two,for", "one,tre", "TWO"],
+            ),
+            FlagTestData(
+                test="Repeated flag for list.",
+                expected={TestEnum.TWO, TestEnum.FOR, TestEnum.ONE, TestEnum.TRE},
+                action=ActionArgs(
+                    nargs="+",
+                    type=TestEnum,
+                    container_type=set,
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=["two,for", "one,tre", "TWO"],
+            ),
+        ]
+    )
+    def test_EnumListAction(self, test: FlagTestData):
+        self.FlagTest(test)
+
+    @parameterized.expand(
+        [
+            FlagTestData(
+                test="Parse from iso datetime.",
+                expected=datetime(
+                    year=2024,
+                    month=1,
+                    day=30,
+                    hour=13,
+                    minute=14,
+                    second=51,
+                    tzinfo=timezone.utc,
+                ),
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionDateTimeOrTimeDelta,
+                ),
+                input=["2024-01-30T13:14:51"],
+            ),
+            FlagTestData(
+                test="Parse from iso datetime applying midnight.",
+                expected=datetime(year=2024, month=1, day=30, tzinfo=timezone.utc),
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionDateTimeOrTimeDelta,
+                    midnight=True,
+                ),
+                input=["2024-01-30T13:14:51"],
+            ),
+            FlagTestData(
+                test="Parse from short datetime.",
+                expected=datetime(year=2024, month=1, day=30, tzinfo=timezone.utc),
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionDateTimeOrTimeDelta,
+                ),
+                input=["20240130"],
+            ),
+            FlagTestData(
+                test="Parse from short datetime, bad input.",
+                expected="argument flag: Invalid date string: '20240230', day is out of range for month",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionDateTimeOrTimeDelta,
+                ),
+                input=["20240230"],
+            ),
+            FlagTestData(
+                test="Parse from timedelta.",
+                expected=datetime(2024, 9, 4, 14, 15, 16, 123000, timezone.utc),
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionDateTimeOrTimeDelta,
+                    reference=_NOW,
+                ),
+                input=["+1w"],
+            ),
+            FlagTestData(
+                test="Parse from timedelta applying midnight.",
+                expected=datetime(2024, 9, 4, 0, 0, 0, 0, timezone.utc),
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionDateTimeOrTimeDelta,
+                    reference=_NOW,
+                    midnight=True,
+                ),
+                input=["+1w"],
+            ),
+            FlagTestData(
+                test="Parse from negative timedelta.",
+                expected=datetime(2024, 8, 21, 14, 15, 16, 123000, timezone.utc),
+                action=ActionArgs(
+                    "--flag",
+                    action=mbo.app.flags.ActionDateTimeOrTimeDelta,
+                    reference=_NOW,
+                ),
+                input=["--flag=-1w"],
+            ),
+        ]
+    )
+    def test_DateTimeOrTimeDeltaAction(self, test: FlagTestData):
+        self.FlagTest(test)
 
 
 if __name__ == "__main__":
