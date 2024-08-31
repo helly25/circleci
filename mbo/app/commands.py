@@ -182,12 +182,18 @@ class CommandParagraphFormatter(ParagraphFormatter):
             action
         )
         if self.IsOutputMode(HelpOutputMode.MARKDOWN):
-            return "\n" + result + "\n\n"
+            return "\n`" + result + "`\n\n"
         return result
 
     def _format_action(self, action) -> str:
         result: str = super(CommandParagraphFormatter, self)._format_action(action)
-        # ATM this works without extra space in either mode.
+        if self.IsOutputMode(HelpOutputMode.MARKDOWN):
+            text = []
+            for r in result.split("\n"):
+                if r.startswith("    "):
+                    r = ("> " + r.lstrip()).rstrip()
+                text.append(r)
+            result = "\n".join(text)
         return result
 
     def _format_usage(self, usage, actions, groups, prefix):
@@ -349,6 +355,7 @@ class Help(Command):
 
     def __init__(self) -> None:
         super(Help, self).__init__()
+        self.exit_code = 0
         self.parser.add_argument(
             "--all_commands",
             action=argparse.BooleanOptionalAction,
@@ -462,4 +469,4 @@ class Help(Command):
                     cmd.parser.prog = self.program + " " + name
                     cmd.parser.usage = argparse.SUPPRESS
                     self.Print(cmd.parser.format_help())
-        exit(1)
+        exit(self.exit_code)

@@ -20,6 +20,8 @@ load("@rules_python//python:pip.bzl", "compile_pip_requirements")
 exports_files([
     "mypy.ini",
     "requests.txt",
+    "README.header.txt",
+    "README.md",
 ])
 
 compile_pip_requirements(

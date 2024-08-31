@@ -15,6 +15,7 @@
 
 """Tool to fetch and analyze CircleCI workflows."""
 
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("@my_pip_deps//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 
@@ -71,4 +72,21 @@ py_binary(
         ":workflows_lib_py",
         "//mbo/app:commands_py",
     ],
+)
+
+genrule(
+    name = "readme_gen",
+    testonly = True,
+    srcs = ["//:README.header.txt"],
+    outs = ["readme.txt"],
+    cmd = """
+        ./$(location :workflows) help --help_output_mode=markdown --all_commands --prefix="$(location //:README.header.txt)" > "$@"
+    """,
+    tools = [":workflows"],
+)
+
+diff_test(
+    name = "readme_test",
+    file1 = "//:README.md",
+    file2 = ":readme.txt",
 )
