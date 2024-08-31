@@ -26,7 +26,7 @@ from parameterized import parameterized
 
 import circleci.workflows_lib
 from circleci.circleci_api_v2 import CircleCiApiV2
-from circleci.commands import Command, Print, SnakeCase
+from mbo.app.commands import Command, Print, SnakeCase
 
 
 class WorkflowsTest(unittest.TestCase):
@@ -62,8 +62,12 @@ class WorkflowsTest(unittest.TestCase):
                 with redirect_stdout(io.StringIO()) as capture:
                     with patch.object(
                         CircleCiApiV2, "RequestBranches", return_value=["b1", "b2"]
-                    ) as mock_client:
-                        mock_client = CircleCiApiV2("__test__", "TOKEN", "project")
+                    ) as mock_request_branches:
+                        mock_client = CircleCiApiV2(
+                            circleci_server="__test__",
+                            circleci_token="TOKEN",
+                            project_slug="project",
+                        )
                         with patch(
                             "circleci.workflows_lib.CircleCiCommand._InitCircleCiClient",
                             return_value=mock_client,

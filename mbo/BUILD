@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # SPDX-FileCopyrightText: Copyright (c) The helly25/mbo authors (helly25.com)
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,15 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""A simple [CircleCI API](https://circleci.com) client that fetches workflow
-stats from the CircleCI API server and writes them as a CSV file.
-
-Most file based parameters transparently support gzip and bz2 compression when
-they have a '.gz' or '.bz2' extension respectively.
-"""
-
-import circleci.workflows_lib
-import mbo.app.commands
-
-if __name__ == "__main__":
-    mbo.app.commands.Command.Run()
+"""Python MBO lib."""

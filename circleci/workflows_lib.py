@@ -23,11 +23,21 @@ import re
 import sys
 import time
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from enum import Enum
 from pathlib import Path
+from typing import IO, TYPE_CHECKING, Any, Optional
 
-from circleci.circleci_api_v2 import CircleCiApiV2
-from circleci.commands import Command, Die, Log, OpenTextFile, Print
+if TYPE_CHECKING:
+    from _typeshed import SupportsWrite
+else:
+    SupportsWrite = IO
+
+import humanize
+
+from circleci.circleci_api_v2 import CircleCiApiV2, CircleCiApiV2Opts, LogRequestDetail
+from mbo.app.commands import Command, Die, DocOutdent, Log, OpenTextFile, Print
+from mbo.app.flags import EnumListAction, ParseDateTimeOrDelta
 
 # Keys used by the `fetch` command.
 # Instead of `created_at` and `stopped_at` we provide `created`/`created_unix`
@@ -62,14 +72,19 @@ FETCH_WORKFLOW_DETAIL_EXTRAS = [
 FETCH_WORKFLOW_DETAIL_KEYS = FETCH_WORKFLOW_KEYS + FETCH_WORKFLOW_DETAIL_EXTRAS
 
 
+def TimeRangeStr(start: datetime, end: datetime) -> str:
+    return f"Time range: [{start} .. {end}] ({humanize.precisedelta(end - start)})."
+
+
 class CircleCiCommand(Command):
     """Abstract base class for commands that use the CircleCI API."""
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(CircleCiCommand, self).__init__()
+        self.log_requests_to_file: Optional[SupportsWrite[str]] = None
         self.parser.add_argument(
             "--circleci_server",
             default="",
@@ -86,46 +101,69 @@ class CircleCiCommand(Command):
             help="CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')",
         )
         self.parser.add_argument(
-            "--project_slug",
+            "--circleci_project_slug",
             default="",
             type=str,
             help="CircleCI project-slug (defaults to environment variable 'CIRCLECI_PROJECT_SLUG').",
         )
+        self.parser.add_argument(
+            "--log_requests_to_file",
+            type=Path,
+            default=None,
+            help="Whether to log all requests for debugging purposes.",
+        )
+        self.parser.add_argument(
+            "--log_requests_details",
+            default=[LogRequestDetail.REQUEST],
+            type=LogRequestDetail,
+            allow_empty=False,
+            container_type=set,
+            action=EnumListAction,
+            help="Comma separated list of LogRequestDetails.",
+        )
 
     def Prepare(self, argv: list[str]) -> None:
         super(CircleCiCommand, self).Prepare(argv)
+        self.log_requests_to_file = None
+        if self.args.log_requests_to_file:
+            self.log_requests_to_file = OpenTextFile(
+                self.args.log_requests_to_file, "wt"
+            )
         self.circleci = self._InitCircleCiClient(
-            circleci_server=self.args.circleci_server,
-            circleci_token=self.args.circleci_token,
-            project_slug=self.args.project_slug,
+            options=CircleCiApiV2Opts(
+                circleci_server=self.args.circleci_server,
+                circleci_token=self.args.circleci_token,
+                project_slug=self.args.circleci_project_slug,
+                log_requests_to_file=self.log_requests_to_file,  # Not from args!
+                log_requests_details=self.args.log_requests_details,
+            )
         )
 
     @staticmethod
-    def _InitCircleCiClient(
-        circleci_server: str, circleci_token: str, project_slug: str
-    ) -> CircleCiApiV2:
-        circleci_server = str(
-            circleci_server or os.getenv("CIRCLECI_SERVER", "https://circleci.com")
+    def _InitCircleCiClient(options: CircleCiApiV2Opts) -> CircleCiApiV2:
+        options.circleci_server = str(
+            options.circleci_server
+            or os.getenv("CIRCLECI_SERVER", "https://circleci.com")
         )
-        if not circleci_server:
+        if not options.circleci_server:
             Die(
                 "Must provide non empty `--circleci_server` flag or environment variable 'CIRCLECI_SERVER'."
             )
-        circleci_token = str(circleci_token or os.getenv("CIRCLECI_TOKEN"))
-        if not circleci_token:
+        options.circleci_token = str(
+            options.circleci_token or os.getenv("CIRCLECI_TOKEN")
+        )
+        if not options.circleci_token:
             Die(
                 "Must provide non empty `--circleci_token` flag or environment variable 'CIRCLECI_TOKEN'."
             )
-        project_slug = str(project_slug or os.getenv("CIRCLECI_PROJECT_SLUG"))
-        if not project_slug:
-            Die(
-                "Must provide non empty `--project_slug` flag or environment variable 'CIRCLECI_PROJECT_SLUG'."
-            )
-        return CircleCiApiV2(
-            circleci_server=circleci_server,
-            circleci_token=circleci_token,
-            project_slug=project_slug,
+        options.project_slug = str(
+            options.project_slug or os.getenv("CIRCLECI_PROJECT_SLUG")
         )
+        if not options.project_slug:
+            Die(
+                "Must provide non empty `--circleci_project_slug` flag or environment variable 'CIRCLECI_PROJECT_SLUG'."
+            )
+        return options.CreateClient()
 
     def AddDetails(self, row: dict[str, str]) -> dict[str, str]:
         """Fetches details for `row`, combines the row with the details and returns the result."""
@@ -140,9 +178,26 @@ class CircleCiCommand(Command):
                 result[k] = details.get(k, "")
         return result
 
+    def LogRowProgress(self, row_index: int) -> None:
+        if self.args.progress:
+            if not row_index % 1000:
+                Log(f"{row_index}")
+            elif not row_index % 20:
+                Log(".", end="")
+
+    def LogRowProgressEnd(self, row_index: int) -> None:
+        if self.args.progress:
+            if (row_index % 1000) < 20:
+                Log(f".{row_index}")
+            else:
+                Log(f"{row_index}")
+
 
 class RequestBranches(CircleCiCommand):
     """Read and display the list of branches for `workflow` from CircleCI API.
+
+    By default this fetches branches for the workflow `default_workflow`. The workflow can be
+    specified with the `--workflow` flag.
 
     ```
     bazel run //circleci:workflows -- request_branches
@@ -203,7 +258,19 @@ class RequestWorkflow(CircleCiCommand):
 
 
 class Fetch(CircleCiCommand):
-    """Fetch workflow stats from the CircleCI API server and writes them as a CSV file.
+    """Fetch workflow data from the CircleCI API server and writes them as a CSV file.
+
+    The time range to fetch runs for can be specified using flags `--start`, `--end` and `--midnight`.
+    By default fetch will retrieve the data for the past 89 complete days starting at midnight.
+
+    The easiest and intended way to manually control the time range is to speficy `--start` as an
+    offset to the current time. For instance, using `--start=1w` will fetch runs for the past week.
+
+    In many cases it is preferably to fetch data for complete days. That can be achieved by with the
+    `--midnight` flag.
+
+    After fetching general workflow information, the command will fetch all details if flag
+    `fetch_workflow_details` if True (default).
 
     ```
     bazel run //circleci:workflows -- fetch --output "${PWD}/data/circleci_workflows_$(date +"%Y%m%d").csv.bz2"
@@ -229,24 +296,84 @@ class Fetch(CircleCiCommand):
             "--end",
             default="",
             type=str,
-            help=r"End (newest) Date/time in format `%Y%m%d`, defaults to `now`.",
+            help="""End (newest) date/time in Python [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)
+                format, e.g. `200241224` or as a negative time difference,
+                e.g. `-10days` (for details see [pytimeparse](https://github.com/wroberts/pytimeparse)).
+
+                This defaults to `now`.
+            """,
         )
         self.parser.add_argument(
             "--start",
             default="",
             type=str,
-            help=r"Start (oldest) Date/time in format `%Y%m%d`, defaults to `--end` minus 90 days.",
+            help="""Start (oldest) date/time in Python [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)
+                format, e.g. `200241224` or as a negative time difference,
+                e.g. `-10days` (for details see [pytimeparse](https://github.com/wroberts/pytimeparse)).
+
+                This defaults to `-90days` (or `-89days` if --midnight is active).
+            """,
+        )
+        self.parser.add_argument(
+            "--midnight",
+            default=True,
+            action=argparse.BooleanOptionalAction,
+            help="""Adjust start and end date/time to midnight of the same day.
+            """,
+        )
+        self.parser.add_argument(
+            "--progress",
+            action=argparse.BooleanOptionalAction,
+            help="Whether to indicate progress (defaults to True if `--fetch_workflow_details` is active).",
+        )
+        self.parser.add_argument(
+            "--fetch_workflow_details",
+            default=True,
+            action=argparse.BooleanOptionalAction,
+            help="Whether workflow details should automatically be added.",
         )
 
     def Main(self) -> None:
-        if self.args.end:
-            end = datetime.strptime(self.args.end, r"%Y%m%d")
-        else:
-            end = datetime.now()
-        if self.args.start:
-            start = datetime.strptime(self.args.start, r"%Y%m%d")
-        else:
-            start = end - timedelta(days=90)
+        if self.args.fetch_workflow_details and self.args.progress == None:
+            self.args.progress = True
+        now = datetime.now()
+        now = datetime.combine(
+            now.date(), now.time(), tzinfo=now.tzinfo or timezone.utc
+        )
+        end = ParseDateTimeOrDelta(
+            arg=self.args.end,
+            midnight=self.args.midnight,
+            default=now,
+            reference=now,
+            error_prefix="Bad flag `--end` value '",
+            error_suffix="'.",
+        )
+        start = ParseDateTimeOrDelta(
+            arg=self.args.start,
+            midnight=self.args.midnight,
+            default=end - timedelta(days=90),
+            reference=end,
+            error_prefix="Bad flag `--start` value '",
+            error_suffix="'.",
+        )
+        if (now - start) > timedelta(days=90):
+            if self.args.start:
+                Log("Specified start is more than the maximum of 90 days ago.")
+            if self.args.midnight:
+                if self.args.start:
+                    Log("Adjusting to midnight from 89 days ago.")
+                start = datetime.now() - timedelta(days=89)
+                start = datetime(
+                    start.year, start.month, start.day, tzinfo=start.tzinfo
+                )
+            else:
+                if self.args.start:
+                    Log("Adjusting to 90 days ago.")
+                start = datetime.now() - timedelta(days=90)
+        if start >= end:
+            Die(f"Specified start time {start} must be before end time {end}!")
+        Log(TimeRangeStr(start, end))
+        Log(f"Fetching details: {self.args.fetch_workflow_details}")
         if self.args.workflow:
             workflows = self.args.workflow.split(",")
         else:
@@ -257,18 +384,20 @@ class Fetch(CircleCiCommand):
         with OpenTextFile(filename=self.args.output, mode="w") as csv_file:
             keys = FETCH_WORKFLOW_KEYS
             print(f"{','.join(keys)}", file=csv_file)
-            for workflow in workflows:
+            for workflow in sorted(workflows):
+                Log(f"Fetching workflow runs for '{workflow}'.")
                 runs = self.circleci.RequestWorkflowRuns(
                     workflow=workflow,
                     params={
                         "all-branches": "True",
-                        "start-date": start.strftime(r"%Y-%m-%dT%H:%M:%S%Z"),
-                        "end-date": end.strftime(r"%Y-%m-%dT%H:%M:%S%Z"),
+                        "start-date": self.circleci.FormatTime(start),
+                        "end-date": self.circleci.FormatTime(end),
                     },
                 )
-                Log(f"Read {len(runs)} workflow runs from '{workflow}'.")
+                if self.args.fetch_workflow_details:
+                    Log(f"Fetching {len(runs)} workflow run details for '{workflow}'.")
                 run_count += len(runs)
-                for run in runs:
+                for run_index, run in enumerate(runs, 1):
                     run["workflow"] = workflow
                     created: datetime = self.circleci.ParseTime(run["created_at"])
                     stopped: datetime = self.circleci.ParseTime(run["stopped_at"])
@@ -282,13 +411,15 @@ class Fetch(CircleCiCommand):
                     # Write unix timestamps for sorting etc.
                     run["created_unix"] = str(created.timestamp())
                     run["stopped_unix"] = str(stopped.timestamp())
+                    if self.args.fetch_workflow_details:
+                        self.LogRowProgress(row_index=run_index)
+                        run = self.AddDetails(run)
                     data = ",".join([str(run[k]) for k in keys])
                     print(data, file=csv_file)
-        Log(f"Read {run_count} items.")
-        if max_created:
-            Log(f"Max Date: {max_created.strftime(r'%Y.%m.%d')}.")
-        if min_created:
-            Log(f"Min Date: {min_created.strftime(r'%Y.%m.%d')}.")
+                self.LogRowProgressEnd(row_index=run_index)
+        if min_created and max_created:
+            Log(TimeRangeStr(min_created, max_created))
+        Log(f"Wrote {run_count} items to '{self.args.output}'.")
 
 
 class FetchDetails(CircleCiCommand):
@@ -313,7 +444,10 @@ class FetchDetails(CircleCiCommand):
             help="Name of the output file.",
         )
         self.parser.add_argument(
-            "--progress", type=bool, default=True, help="Whether to indicate progress."
+            "--progress",
+            default=True,
+            action=argparse.BooleanOptionalAction,
+            help="Whether to indicate progress.",
         )
 
     def Main(self) -> None:
@@ -331,15 +465,9 @@ class FetchDetails(CircleCiCommand):
                     f"Bad field names [{headers}], expected subset of [{FETCH_WORKFLOW_DETAIL_KEYS}]"
                 )
             for index, row in enumerate(reader, 1):
-                if self.args.progress:
-                    if not index % 1000:
-                        Log(f"{index}")
-                        Log("Fetching workflow details:", end="")
-                    elif not index % 20:
-                        Log(".", end="")
+                self.LogRowProgress(row_index=index)
                 data[row["id"]] = self.AddDetails(row)
-        if self.args.progress:
-            Log()
+        self.LogRowProgressEnd(row_index=index)
         Log(f"Read {len(data)} details.")
         with OpenTextFile(filename=self.args.output, mode="w") as csv_file:
             writer = csv.DictWriter(
@@ -377,15 +505,14 @@ class Combine(CircleCiCommand):
         )
         self.parser.add_argument(
             "--fetch_workflow_details",
-            default=False,
-            type=bool,
-            help="Whether workflow details should automatically be added if not present.",
+            default=True,
+            action=argparse.BooleanOptionalAction,
+            help="Whether workflow details should automatically be added (if not present).",
         )
         self.parser.add_argument(
             "--progress",
-            type=bool | None,
-            default=None,
-            help="Whether to indicate progress.",
+            action=argparse.BooleanOptionalAction,
+            help="Whether to indicate progress (defaults to True if `--fetch_workflow_details` is active).",
         )
 
     def Main(self) -> None:
@@ -411,13 +538,8 @@ class Combine(CircleCiCommand):
                     if self.args.fetch_workflow_details:
                         row = self.AddDetails(row)
                     data[row["id"]] = row
-                    if self.args.progress:
-                        if not rows % 1000:
-                            Log(f"{rows}")
-                        elif not rows % 20:
-                            Log(".", end="")
-                if self.args.progress:
-                    Log()
+                    self.LogRowProgress(row_index=rows)
+                self.LogRowProgressEnd(row_index=rows)
                 Log(f"Read file {filename} with {rows} rows.")
         with OpenTextFile(filename=self.args.output, mode="w") as csv_file:
             writer = csv.DictWriter(
@@ -457,21 +579,27 @@ class Filter(Command):
             help="Name of the output file.",
         )
         self.parser.add_argument(
-            "--min_duration_sec",
+            "--min_duration_sec",  # TODO(helly25): Use a duration parser
             type=int,
             default=600,
             help="Mininum duration to accept row in [sec].",
         )
         self.parser.add_argument(
+            "--output_duration_as_mins",
+            default=True,
+            action=argparse.BooleanOptionalAction,
+            help="Whether to report duration values in minutes.",
+        )
+        self.parser.add_argument(
             "--exclude_branches",
             type=str,
             default="main|master|develop|develop-freeze.*",
-            help="Exclude brnaches by full regular expression match.",
+            help="Exclude branches by full regular expression match.",
         )
         self.parser.add_argument(
             "--exclude_incomplete_reruns",
-            type=bool,
             default=True,
+            action=argparse.BooleanOptionalAction,
             help="If workflow details are available, reject inomplete reruns "
             "(e.g.: rerun-single-job, rerun-workflow-from-failed).",
         )
@@ -573,9 +701,11 @@ class Filter(Command):
                     and row["tag"] not in ["", "rerun-workflow-from-beginning"]
                 ):
                     continue
-                duration = int(row["duration"]) / 60
-                if duration * 60 < self.args.min_duration_sec:
+                duration = float(row["duration"])
+                if duration < self.args.min_duration_sec:
                     continue
+                if self.args.output_duration_as_mins:
+                    duration /= 60
                 workflow = row["workflow"]
                 workflows.add(workflow)
                 if self.args.workflow and workflow not in self.args.workflow.split(","):
@@ -585,6 +715,7 @@ class Filter(Command):
                 created = self.ParseTime(row["created"])
                 if created.strftime("%u") not in self.args.only_weekdays:
                     continue
+                # NOT detected by gsheets as date/time!
                 date = created.strftime(r"%Y.%m.%d")
                 row["date"] = date
                 if not date in data:
@@ -615,6 +746,11 @@ class Filter(Command):
                         "runs": str(r_cnt),
                     }
                 )
-        Log(f"First {sorted_data[0][0]['date']}")
-        Log(f"Last  {sorted_data[-1][0]['date']}")
+        if sorted_data:
+            Log(
+                TimeRangeStr(
+                    datetime.strptime(sorted_data[0][0]["date"], r"%Y.%m.%d"),
+                    datetime.strptime(sorted_data[-1][0]["date"], r"%Y.%m.%d"),
+                )
+            )
         Log(f"Wrote {len(sorted_data)} rows to '{self.args.output}'.")

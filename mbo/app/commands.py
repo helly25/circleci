@@ -55,15 +55,19 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Type, cast
 
+from argparse_formatter import ParagraphFormatter
+
+from mbo.app.flags import EnumAction
+
 if TYPE_CHECKING:
     from _typeshed import OpenTextMode
 else:
     OpenTextMode = str
 
 
-def Die(message: Any):
+def Die(message: Any, exit_code: int = 1):
     print(f"FATAL: {message}", flush=True, file=sys.stderr)
-    exit(1)
+    exit(exit_code)
 
 
 def Log(message: Any = "", end="\n", flush=True, file=None):
@@ -122,13 +126,97 @@ def SnakeCase(text: str) -> str:
     return re.sub("_+", "_", text).lower()
 
 
+class HelpOutputMode(Enum):
+    TEXT = "text"
+    MARKDOWN = "markdown"
+
+
+class CommandParagraphFormatter(ParagraphFormatter):
+    """A Paragraph formatter that can control TEXT and MARKDOWN formatting.
+
+    The formatter is also able to handle '```' markdown correctly in either mode.
+    """
+
+    _help_output_mode: HelpOutputMode = HelpOutputMode.TEXT
+
+    @classmethod
+    def SetOutputMode(cls, output_mode: HelpOutputMode):
+        cls._help_output_mode = output_mode
+
+    def IsOutputMode(self, output_mode: HelpOutputMode) -> bool:
+        return self._help_output_mode == output_mode
+
+    def __init__(self, **kwargs) -> None:
+        super(CommandParagraphFormatter, self).__init__(**kwargs)
+
+    def _fill_text(self, text: str, width: int, indent: str) -> str:
+        if len(indent) > 4:
+            indent = " " * 4
+        keep = False
+        sub_text = ""
+        result = ""
+        for line in text.split("\n"):
+            if line.startswith("```"):
+                if not keep:
+                    if sub_text:
+                        result += super(CommandParagraphFormatter, self)._fill_text(
+                            sub_text, width, indent
+                        )
+                        result += "\n\n"
+                    sub_text = ""
+                result += line + "\n"
+                keep = not keep
+                continue
+            if keep:
+                result += line + "\n"
+            else:
+                sub_text += line + "\n"
+        if sub_text:
+            result += super(CommandParagraphFormatter, self)._fill_text(
+                sub_text, width, indent
+            )
+        return result
+
+    def _format_action_invocation(self, action):
+        result = super(CommandParagraphFormatter, self)._format_action_invocation(
+            action
+        )
+        if self.IsOutputMode(HelpOutputMode.MARKDOWN):
+            return "\n" + result + "\n\n"
+        return result
+
+    def _format_action(self, action) -> str:
+        result: str = super(CommandParagraphFormatter, self)._format_action(action)
+        # ATM this works without extra space in either mode.
+        return result
+
+    def _format_usage(self, usage, actions, groups, prefix):
+        if self.IsOutputMode(HelpOutputMode.MARKDOWN):
+            if not prefix:
+                prefix = "### usage:"
+        return super(CommandParagraphFormatter, self)._format_usage(
+            usage, actions, groups, prefix
+        )
+
+    def start_section(self, heading: str | None) -> None:
+        if self.IsOutputMode(HelpOutputMode.MARKDOWN):
+            if heading:
+                heading = f"### {heading}"
+        super(CommandParagraphFormatter, self).start_section(heading)
+
+    def add_argument(self, action):
+        super(CommandParagraphFormatter, self).add_argument(action)
+        if self.IsOutputMode(HelpOutputMode.MARKDOWN):
+            self._action_max_length = 4
+
+
 def DocOutdent(text: str) -> str:
     if not text:
         return text
     result = []
     lines = text.strip("\n").rstrip().split("\n")
     if text.startswith("\n") and not lines[0].startswith(" "):
-        result.append("XXX" + lines[0])
+        result.append(lines[0])
         lines.pop(0)
     max_indent = -1
     for line in lines:
@@ -184,7 +272,10 @@ class Command(ABC):
             cls._commands[cls.name()] = cls
 
     def __init__(self):
-        self.parser = argparse.ArgumentParser(description=self.description())
+        self.parser = argparse.ArgumentParser(
+            description=self.description(),
+            formatter_class=CommandParagraphFormatter,
+        )
 
     @classmethod
     def name(cls):
@@ -204,6 +295,14 @@ class Command(ABC):
                    same as if `Argparse.parse_args` was passed no argument (in
                    which case it uses `sys.argv`.
         """
+        self.program = argv[0] if argv else "-"
+        match = re.fullmatch(
+            "(?:.*/)?bazel-out/.*/bin/.*[.]runfiles/(?:__main__|_main)/(.*)/([^/]+)[.]py",
+            self.program,
+        )
+        if match:
+            self.program = f"bazel run //{match.group(1)}:{match.group(2)} --"
+        self.parser.prog = self.program + " " + self.name()
         self.args = self.parser.parse_args(argv[1:])
 
     @abstractmethod
@@ -213,62 +312,63 @@ class Command(ABC):
     @staticmethod
     def Run(argv: list[str] = sys.argv):
         command_name = argv[1] if len(argv) > 1 else ""
-        if not Command._commands:
-            Die("No Commands were implemented.")
-        if command_name in Command._commands.keys():
-            command = Command._commands[command_name]()
-        else:
-            command = None
-        if len(argv) < 2 or not command:
-            command = Command._commands["help"]()
+        if not Command._commands or Command._commands.keys() == ["help"]:
+            Die("No `Command` were implemented.")
+        command_type = Command._commands.get(command_name, None)
+        if not command_type:
+            command_type = Command._commands["help"]
+        command = command_type()
         argv = [argv[0]] + argv[2:]
+        command.parser.add_argument(
+            "--mbo_app_swallow_exceptions",
+            action=argparse.BooleanOptionalAction,
+            help="Whether to swollow details from exceptions and only show their error message.",
+        )
+        command.parser.add_argument(
+            "--help_output_mode",
+            "--help-output-mode",
+            dest="help_output_mode",
+            type=HelpOutputMode,
+            action=EnumAction,
+            help="Output mode for help.",
+        )
         command.Prepare(argv)
+        CommandParagraphFormatter.SetOutputMode(command.args.help_output_mode)
         try:
             command.Main()
+        except KeyboardInterrupt:
+            Die(message="Interrupted!", exit_code=130)
         except Exception as err:
-            Die(err)
-
-
-class HelpOutputMode(Enum):
-    TEXT = "text"
-    MARKDOWN = "markdown"
+            if command.args.mbo_app_swallow_exceptions:
+                Die(err)
+            raise err
 
 
 class Help(Command):
     """Provides help for the program."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(Help, self).__init__()
         self.parser.add_argument(
-            "--mode",
-            type=HelpOutputMode,
-            default=HelpOutputMode.TEXT,
-            help="The output mode for printing help.",
-        )
-        self.parser.add_argument(
             "--all_commands",
-            action="store_true",
+            action=argparse.BooleanOptionalAction,
             help="Whether to show all commands",
         )
         self.parser.add_argument(
-            "--prefix",
+            "--show_usage",
+            action=argparse.BooleanOptionalAction,
+            help="Whether to show generated command useage (aka synopsis).",
+        )
+        self.parser.add_argument(
+            "--prefix_file",
             type=Path,
-            default="",
             help="A file that should be used as a prefix on output.",
         )
+        self.esequential_mpty_lines: int = 0
 
-    def Prepare(self, argv: list[str]) -> None:
-        super(Help, self).Prepare(argv)
-        self.program = argv[0] if argv else "-"
-        match = re.fullmatch(
-            "(?:.*/)?bazel-out/.*/bin/.*[.]runfiles/(?:__main__|_main)/(.*)/([^/]+)[.]py",
-            self.program,
-        )
-        if match:
-            self.program = f"bazel run //{match.group(1)}:{match.group(2)} --"
-
-    def Print(self, text: str = ""):
-        if self.args.mode == HelpOutputMode.TEXT:
+    def Print(self, text: str = "") -> None:
+        # Deal with links...
+        if self.args.help_output_mode == HelpOutputMode.TEXT:
             # In text mode replace replace images and links with their targets.
             img_re = re.compile(r"\[!\[([^\]]+)\]\([^\)]+\)\]\(([^\)]+)\)")
             lnk_re = re.compile(r"\[!?([^\]]+)\]\([^\)]+\)")
@@ -277,35 +377,56 @@ class Help(Command):
                 (text, n_lnk) = lnk_re.subn("\\1", text)
                 if not n_img and not n_lnk:
                     break
-        globals()["Print"](text)
+        # Allow at most 2 sequential empty lines. If there were some on the last
+        # call to `Print`, then push at most two empty lines onto `result`.
+        # Then loop over the lines and if there are empty lines count them.
+        # For non empty lines print at most two empty lines if some empty lines
+        # preceeded.
+        max_empty_lines = 1
+        self.esequential_mpty_lines = min(max_empty_lines, self.esequential_mpty_lines)
+        text = "\n" * self.esequential_mpty_lines + text
+        self.esequential_mpty_lines = 0
+        for t in text.split("\n"):
+            if t.count(" ") == len(t):
+                t = ""
+            if not t:
+                self.esequential_mpty_lines = min(
+                    max_empty_lines, self.esequential_mpty_lines + 1
+                )
+            else:
+                while self.esequential_mpty_lines > 0:
+                    globals()["Print"]("")
+                    self.esequential_mpty_lines -= 1
+                self.esequential_mpty_lines = 0
+                globals()["Print"](t)
 
     def H1(self, text: str):
-        if self.args.mode == HelpOutputMode.MARKDOWN:
+        if self.args.help_output_mode == HelpOutputMode.MARKDOWN:
             self.Print(f"# {text.rstrip(':')}")
         else:
             self.Print(f"{text}\n")
 
     def H2(self, text: str):
-        if self.args.mode == HelpOutputMode.MARKDOWN:
+        if self.args.help_output_mode == HelpOutputMode.MARKDOWN:
             self.Print(f"## {text.rstrip(':')}")
         else:
             self.Print(f"{text}\n")
 
     def Code(self, text: str):
-        if self.args.mode == HelpOutputMode.MARKDOWN:
+        if self.args.help_output_mode == HelpOutputMode.MARKDOWN:
             self.Print(f"```\n{text}\n```")
         else:
             self.Print(f"  {text}")
 
     def ListItem(self, text: str):
-        if self.args.mode == HelpOutputMode.MARKDOWN:
+        if self.args.help_output_mode == HelpOutputMode.MARKDOWN:
             self.Print(f"* {text}")
         else:
             self.Print(f"  {text}")
 
     def Main(self) -> None:
-        if self.args.prefix:
-            self.Print(self.args.prefix.open("rt").read())
+        if self.args.prefix_file:
+            self.Print(self.args.prefix_file.open("rt").read())
         first_line, program_doc = DocOutdent(
             str(sys.modules["__main__"].__doc__).strip()
         ).split("\n\n", 1)
@@ -334,5 +455,11 @@ class Help(Command):
                 self.Print()
                 self.H2(f"Command {name}")
                 self.Print()
-                self.Print(command.description())
+                if self.args.help_output_mode == HelpOutputMode.TEXT:
+                    self.Print(command.description())
+                else:
+                    cmd = command()
+                    cmd.parser.prog = self.program + " " + name
+                    cmd.parser.usage = argparse.SUPPRESS
+                    self.Print(cmd.parser.format_help())
         exit(1)

@@ -1,3 +1,7 @@
+argparse-formatter
+freezegun
+humanize
 parameterized
+pytimeparse
 requests
 responses
