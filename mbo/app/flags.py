@@ -141,7 +141,7 @@ class ActionEnumList(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None) -> None:
         if isinstance(values, list):
             values_str = ",".join(values)
-        elif type(values) == str:
+        elif isinstance(values, str):
             values_str = values
         else:
             raise argparse.ArgumentError(self, "Unexpected value type {type(values)}.")
@@ -167,7 +167,7 @@ def _MaybeMidnight(
 
 
 def _ParseDateTime(
-    value: str | datetime, midnight: bool = False, tz: tzinfo = timezone.utc
+    value: Any, midnight: bool = False, tz: tzinfo = timezone.utc
 ) -> datetime:
     if value is datetime:
         return _MaybeMidnight(cast(datetime, value), midnight=midnight, tz=tz)
@@ -216,9 +216,9 @@ def ParseDateTimeOrTimeDelta(
     result: datetime
     if value.startswith(("-", "+")):
         seconds: float | None = timeparse(value)
-        if type(seconds) == type(None):
+        if seconds is None:
             if error_prefix is None:
-                error_prefix = "Bad timedelta value '"
+                error_prefix = "Bad `timedelta` value, must be `int` seconds, not '"
             if error_suffix is None:
                 error_suffix = "'."
             raise ValueError(f"{error_prefix}{value}{error_suffix}")
@@ -250,7 +250,12 @@ class ActionDateTimeOrTimeDelta(argparse.Action):
     * reference:    The reference datetime to use for time deltas (defaults to `datetime.now`).
     * tz:           Fallback timezone.
     * verify_only:  If True (False is default), then the input will only be verified. The resulting
-                    value is the input and its type is `str`.
+                    value is the input and its type is `str`. The sole purpose is to verify an input
+                    but process it later, which allows one flag to provide its value as a reference
+                    to other flags. Once the arguments have been parsed, their values can be post
+                    processed with `ParseDateTimeOrTimeDelta`. Therefore in this mode all errors
+                    will be raied, but no modification will be applied. However, the default value
+                    will still be applied.
 
     Example:
     ```
@@ -262,6 +267,28 @@ class ActionDateTimeOrTimeDelta(argparse.Action):
     args=parser.parse_args(["--time", "+1week"])
     ```
     """
+
+    def _ParseDateTimeStrict(
+        self,
+        name: str,
+        value: Any,
+        midnight: bool = False,
+        tz: tzinfo = timezone.utc,
+    ) -> datetime | None:
+        if value is None or value == "":
+            return None
+        elif not isinstance(value, str) and not isinstance(value, datetime):
+            raise argparse.ArgumentError(
+                self,
+                f"{name.capitalize()} value must be None or of type `datetime` or `str`, provided is `{type(value)}`.",
+            )
+        try:
+            return _ParseDateTime(value, midnight=self._midnight, tz=self._tz)
+        except ValueError as error:
+            raise argparse.ArgumentError(
+                self,
+                f"{name.capitalize()} value `{value}` cannot be parsed as `datetime`.",
+            )
 
     def __init__(self, **kwargs) -> None:
         self._verify_only = kwargs.pop("verify_only", False)
@@ -284,34 +311,24 @@ class ActionDateTimeOrTimeDelta(argparse.Action):
                 raise argparse.ArgumentError(
                     self, f"Type must be `datetime`, provided type is `{self._type}`."
                 )
-        try:
-            if default_v:
-                default = _ParseDateTime(
-                    default_v, midnight=self._midnight, tz=self._tz
-                )
-            else:
-                default = None
-        except ValueError as error:
-            raise argparse.ArgumentError(
-                self, f"Default value `{default_v}` cannot be parsed as `datetime`."
+        self.default: datetime = (
+            self._ParseDateTimeStrict(
+                name="default",
+                value=default_v,
+                midnight=self._midnight,
+                tz=self._tz,
             )
-        if self._verify_only:
-            self.default = str(default or default_v)
-        elif type(default) == datetime:
-            self.default = default
-        else:
-            raise argparse.ArgumentError(
-                self,
-                f"Default value must be of type datetime, provided is `{type(default)}`.",
+            or now
+        )
+        self._reference: datetime = (
+            self._ParseDateTimeStrict(
+                name="reference",
+                value=reference,
+                midnight=self._midnight,
+                tz=self._tz,
             )
-        try:
-            self._reference: datetime = _ParseDateTime(
-                reference or now, midnight=self._midnight, tz=self._tz
-            )
-        except ValueError as error:
-            raise argparse.ArgumentError(
-                self, f"Reference value `{reference}` cannot be parsed as `datetime`."
-            )
+            or now
+        )
 
     def _parse(self, value) -> datetime:
         try:
@@ -329,11 +346,13 @@ class ActionDateTimeOrTimeDelta(argparse.Action):
         result: Any
         if values is list:
             result = [self._parse(v) for v in values]
-        elif type(values) == str:
+        elif isinstance(values, str):
             result = self._parse(values)
+        elif isinstance(values, datetime):
+            result = values
         else:
-            raise argparse.ArgumentError(self, "Unexpected value type {type(values)}.")
+            raise argparse.ArgumentError(self, f"Unexpected value type {type(values)}.")
         if self._verify_only:
-            setattr(namespace, self.dest, values)
+            setattr(namespace, self.dest, str(values))
         else:
             setattr(namespace, self.dest, result)
