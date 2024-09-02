@@ -409,6 +409,8 @@ class Fetch(CircleCiCommand):
                 )
                 if self.args.fetch_workflow_details:
                     Log(f"Fetching {len(runs)} workflow run details for '{workflow}'.")
+                if not runs:
+                    continue
                 run_count += len(runs)
                 for run_index, run in enumerate(runs, 1):
                     run["workflow"] = workflow

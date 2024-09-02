@@ -201,6 +201,7 @@ class FlagsTest(unittest.TestCase):
                 self.assertEqual(
                     test.expected, args.flag, "Bad value in test: " + test.test
                 )
+                self.assertIsInstance(args.flag, type(test.expected))
             except argparse.ArgumentError as error:
                 self.assertIsNotNone(test.expected_error, error)
                 if test.expected_error:
@@ -448,6 +449,17 @@ class FlagsTest(unittest.TestCase):
                 action=ActionArgs(
                     action=mbo.app.flags.ActionDateTimeOrTimeDelta,
                     nargs="?",
+                    verify_only=True,
+                ),
+                input=[],
+            ),
+            FlagTestData(
+                test="Non present flag with default.",
+                expected=str(_NOW_DATETIME),
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    "--flag",
+                    action=mbo.app.flags.ActionDateTimeOrTimeDelta,
                     verify_only=True,
                 ),
                 input=[],
