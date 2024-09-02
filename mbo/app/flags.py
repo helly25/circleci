@@ -244,11 +244,15 @@ class ActionDateTimeOrTimeDelta(argparse.Action):
     If `value` starts with either `-` or `+`, then it will be parsed as `timedelta`.
     Otherwise `value` will be parsed as Python [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601).
 
+    The resulting value is either a `datetime` or a `str` value if `verify_only==True`.
+
     This action has the additional config:
     * default:      The value to use if `value` is empty (defaults to `datetime.now`).
+                    This must be `None` or of type `datetime`, `str`.
     * midnight:     Whether to adjust the date/time to midnight of the day.
     * reference:    The reference datetime to use for time deltas (defaults to `datetime.now`).
-    * tz:           Fallback timezone.
+                    This must be `None` or of type `datetime`, `str`.
+    * tz:           Fallback timezone (defaults to `timezone.utc`).
     * verify_only:  If True (False is default), then the input will only be verified. The resulting
                     value is the input and its type is `str`. The sole purpose is to verify an input
                     but process it later, which allows one flag to provide its value as a reference
@@ -267,6 +271,51 @@ class ActionDateTimeOrTimeDelta(argparse.Action):
     args=parser.parse_args(["--time", "+1week"])
     ```
     """
+
+    def __init__(self, **kwargs) -> None:
+        self._verify_only = kwargs.pop("verify_only", False)
+        self._midnight = kwargs.pop("midnight", False)
+        self._tz = kwargs.pop("tz", timezone.utc)
+        self._type = kwargs.pop("type", str if self._verify_only else datetime)
+        now = datetime.now(self._tz)
+        default_v = kwargs.pop("default", now)
+        reference = kwargs.pop("reference", default_v)
+
+        super(ActionDateTimeOrTimeDelta, self).__init__(**kwargs)
+        if self._verify_only:
+            if self._type != str:
+                raise argparse.ArgumentError(
+                    self,
+                    f"Type (for verification) must be `str`, provided type is `{self._type}`.",
+                )
+        else:
+            if self._type != datetime:
+                raise argparse.ArgumentError(
+                    self, f"Type must be `datetime`, provided type is `{self._type}`."
+                )
+        # Property `_default_dt` (DateTime) is required for further parsing.
+        self._default_dt: datetime = (
+            self._ParseDateTimeStrict(
+                name="default",
+                value=default_v,
+                midnight=self._midnight,
+                tz=self._tz,
+            )
+            or now
+        )
+        # The actual default must be set to a string value for `verify_only`.
+        self.default: datetime | str = (
+            str(self._default_dt) if self._verify_only else self._default_dt
+        )
+        self._reference: datetime = (
+            self._ParseDateTimeStrict(
+                name="reference",
+                value=reference,
+                midnight=self._midnight,
+                tz=self._tz,
+            )
+            or now
+        )
 
     def _ParseDateTimeStrict(
         self,
@@ -290,51 +339,11 @@ class ActionDateTimeOrTimeDelta(argparse.Action):
                 f"{name.capitalize()} value `{value}` cannot be parsed as `datetime`.",
             )
 
-    def __init__(self, **kwargs) -> None:
-        self._verify_only = kwargs.pop("verify_only", False)
-        self._midnight = kwargs.pop("midnight", False)
-        self._tz = kwargs.pop("tz", timezone.utc)
-        self._type = kwargs.pop("type", str if self._verify_only else datetime)
-        now = datetime.now(self._tz)
-        default_v = kwargs.pop("default", now)
-        reference = kwargs.pop("reference", default_v)
-
-        super(ActionDateTimeOrTimeDelta, self).__init__(**kwargs)
-        if self._verify_only:
-            if self._type != str:
-                raise argparse.ArgumentError(
-                    self,
-                    f"Type (for verification) must be `str`, provided type is `{self._type}`.",
-                )
-        else:
-            if self._type != datetime:
-                raise argparse.ArgumentError(
-                    self, f"Type must be `datetime`, provided type is `{self._type}`."
-                )
-        self.default: datetime = (
-            self._ParseDateTimeStrict(
-                name="default",
-                value=default_v,
-                midnight=self._midnight,
-                tz=self._tz,
-            )
-            or now
-        )
-        self._reference: datetime = (
-            self._ParseDateTimeStrict(
-                name="reference",
-                value=reference,
-                midnight=self._midnight,
-                tz=self._tz,
-            )
-            or now
-        )
-
-    def _parse(self, value) -> datetime:
+    def _parse(self, value: str) -> datetime:
         try:
             return ParseDateTimeOrTimeDelta(
                 value=value,
-                default=self.default,
+                default=self._default_dt,
                 midnight=self._midnight,
                 reference=self._reference,
                 tz=self._tz,

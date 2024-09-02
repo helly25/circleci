@@ -37,9 +37,10 @@ class WorkflowsTest(unittest.TestCase):
             set(Command._commands.keys()).issuperset(
                 {
                     "combine",
-                    "fetch_details",
                     "fetch",
+                    "fetch_details",
                     "filter",
+                    "help",
                     "request_branches",
                     "request_workflow",
                     "request_workflows",
@@ -47,15 +48,15 @@ class WorkflowsTest(unittest.TestCase):
             )
         )
 
-    def test_Workflows(self):
+    def test_RequestBranches(self):
         """Lower level mocking to prove the pieces work together.
 
         Here we bypass the CircleCiApiV2 almost completey as we mock the highest level function we
         call there. That function `RequestBranches` will be mocked, by injection, through mocking
         the `CircleCiCommand._InitCircleCiClient`.
 
-        Now we can call the `branches` sub-command normally by providing an appropriate argv to
-        `Command.Run`. The mocked return_value for the `RequestBranches` will be our result.
+        Now we can call the `request_branches` sub-command normally by providing an appropriate argv
+        to `Command.Run`. The mocked return_value for the `RequestBranches` will be our result.
         """
         with open(os.devnull, "w") as err:
             with redirect_stderr(err):
