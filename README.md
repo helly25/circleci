@@ -72,7 +72,7 @@ bazel run //circleci:workflows -- combine --output=/tmp/circleci.csv "${PWD}/dat
 
 `--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-> Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails (default: [REQUEST]).
 
 `--output OUTPUT`
 
@@ -136,7 +136,7 @@ bazel run //circleci:workflows -- fetch --output "${PWD}/data/circleci_workflows
 
 `--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-> Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails (default: [REQUEST]).
 
 `--workflow WORKFLOW`
 
@@ -212,7 +212,7 @@ bazel run //circleci:workflows -- fetch_details --input "${PWD}/data/circleci_wo
 
 `--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-> Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails (default: [REQUEST]).
 
 `--input INPUT`
 
@@ -321,7 +321,7 @@ bazel run //circleci:workflows -- request_branches
 
 `--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-> Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails (default: [REQUEST]).
 
 `--workflow WORKFLOW`
 
@@ -362,7 +362,7 @@ bazel run //circleci:workflows -- request_workflow --workflow_id <ID>
 
 `--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-> Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails (default: [REQUEST]).
 
 `--workflow_id WORKFLOW_ID`
 
@@ -402,4 +402,4 @@ bazel run //circleci:workflows -- request_workflows
 
 `--log_requests_details {['REQUEST', 'RESPONSE_TEXT', 'STATUS_CODE']}`
 
-> Comma separated list of LogRequestDetails.
+> Comma separated list of LogRequestDetails (default: [REQUEST]).

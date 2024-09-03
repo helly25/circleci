@@ -128,7 +128,7 @@ class CircleCiCommand(Command):
             allow_empty=False,
             container_type=set,
             action=ActionEnumList,
-            help="Comma separated list of LogRequestDetails.",
+            help="Comma separated list of LogRequestDetails (default: [%(default_str)s]).",
         )
 
     def Prepare(self, argv: list[str]) -> None:
