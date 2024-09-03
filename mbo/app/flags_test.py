@@ -228,7 +228,7 @@ class FlagsTest(unittest.TestCase):
                 input=["one"],
             ),
             FlagTestData(
-                test="Setting an empty vlaue requires `allow_empty=True`.",
+                test="Setting an empty value requires `allow_empty=True`.",
                 expected="argument --flag: Empty value is not allowed, chose at least one of [FOR, ONE, TRE, TWO].",
                 expected_error=argparse.ArgumentError,
                 action=ActionArgs(
@@ -240,7 +240,7 @@ class FlagsTest(unittest.TestCase):
                 input=["--flag="],
             ),
             FlagTestData(
-                test="Setting an empty vlaue requires `allow_empty=True` (not False).",
+                test="Setting an empty value requires `allow_empty=True` (not False).",
                 expected="argument --flag: Empty value is not allowed, chose at least one of [FOR, ONE, TRE, TWO].",
                 expected_error=argparse.ArgumentError,
                 action=ActionArgs(
@@ -253,13 +253,26 @@ class FlagsTest(unittest.TestCase):
                 input=["--flag="],
             ),
             FlagTestData(
-                test="Setting an empty vlaue requires with `allow_empty=True` works.",
+                test="Setting an empty default value requires `allow_empty=True`.",
                 expected=[],
                 expected_error=argparse.ArgumentError,
                 action=ActionArgs(
                     "--flag",
                     type=TestEnum,
                     default=[],
+                    action=mbo.app.flags.ActionEnumList,
+                    allow_empty=True,
+                ),
+                input=[],
+            ),
+            FlagTestData(
+                test="Setting an empty value requires `allow_empty=True`.",
+                expected=[],
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    "--flag",
+                    type=TestEnum,
+                    default=[TestEnum.FOR],
                     action=mbo.app.flags.ActionEnumList,
                     allow_empty=True,
                 ),
@@ -277,13 +290,25 @@ class FlagsTest(unittest.TestCase):
                 input=[],
             ),
             FlagTestData(
-                test="Default values work: They can even bypass the type.",
-                expected="Something else",
+                test="Default values cannot bypass the type.",
+                expected="argument --flag: Sub value 'Something else' is not a valid <enum 'TestEnum'> value, chose from [FOR, ONE, TRE, TWO].",
+                expected_error=argparse.ArgumentError,
                 action=ActionArgs(
                     "--flag",
                     type=TestEnum,
                     default="Something else",
                     action=mbo.app.flags.ActionEnumList,
+                ),
+                input=[],
+            ),
+            FlagTestData(
+                test="Cannot (currently) restrict choices.",
+                expected="argument flag: Cannot (currently) restrict choices.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    type=TestEnum,
+                    action=mbo.app.flags.ActionEnumList,
+                    choices=[TestEnum.ONE, TestEnum.TWO],
                 ),
                 input=[],
             ),
@@ -332,6 +357,69 @@ class FlagsTest(unittest.TestCase):
                     action=mbo.app.flags.ActionEnumList,
                 ),
                 input=["two,for", "one,tre", "TWO"],
+            ),
+            FlagTestData(
+                test="Repeated flag values still disallow empty values by default.",
+                expected="argument flag: Empty value is not allowed, chose at least one of [FOR, ONE, TRE, TWO].",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    type=TestEnum,
+                    container_type=set,
+                    default=[TestEnum.TWO],
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=[""],
+            ),
+            FlagTestData(
+                test="Repeated flag values may allow empty values.",
+                expected=set(),
+                action=ActionArgs(
+                    type=TestEnum,
+                    container_type=set,
+                    default=[TestEnum.TWO],
+                    allow_empty=True,
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=[""],
+            ),
+            FlagTestData(
+                test="Repeated flag values may allow empty values but not empty sub values.",
+                expected="argument flag: Empty sub value is not allowed, chose at least one of [FOR, ONE, TRE, TWO], given `['one', '', 'tre']`.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    type=TestEnum,
+                    container_type=set,
+                    default=[TestEnum.TWO],
+                    # allow_empty=True,
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=["one,,tre"],
+            ),
+            FlagTestData(
+                test="Repeated flag values may not have empty sub values.",
+                expected="argument flag: Empty sub value is not allowed, chose at least one of [FOR, ONE, TRE, TWO], given `['one', '', 'tre']`.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    type=TestEnum,
+                    container_type=set,
+                    default=[TestEnum.TWO],
+                    allow_empty=False,
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=["one,,tre"],
+            ),
+            FlagTestData(
+                test="Repeated flag values may not have empty sub values even if empty values are allowed.",
+                expected="argument flag: Empty sub value is not allowed, chose at least one of [FOR, ONE, TRE, TWO], given `['one', '', 'tre']`.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    type=TestEnum,
+                    container_type=set,
+                    default=[TestEnum.TWO],
+                    allow_empty=True,
+                    action=mbo.app.flags.ActionEnumList,
+                ),
+                input=["one,,tre"],
             ),
         ]
     )

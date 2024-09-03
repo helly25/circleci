@@ -72,6 +72,12 @@ class ActionEnumList(argparse.Action):
     * allow_empty:    If False (the default), then an empty list is NOT allowed.
     * container_type: The container type (e.g. list or set).
 
+    NOTE: The `type` is the exact Enum to work with. It will not be available as
+          a property of the action.
+
+    The string-ified default is available as `default_str` for consumprtion in
+    `help`.
+
     Example:
     ```
     parser.add_argument(
@@ -79,9 +85,9 @@ class ActionEnumList(argparse.Action):
         default=[MyEnum.MY_DEFAULT],
         type=MyEnum,
         action=ActionEnumList,
-        allow_empty=False,
+        allow_empty=True,
         container_type=set,
-        help="Comma separated list of MyEnum values.",
+        help="Comma separated list of MyEnum values (default: %(default_str)s).",
     )
     args=parser.parse_args(["--nyenum", "my_default,my_other"])
     ```
@@ -91,68 +97,104 @@ class ActionEnumList(argparse.Action):
         def __init__(self, action: argparse.Action):
             self._action: ActionEnumList = cast(ActionEnumList, action)
 
-        def choices(self) -> Iterable[str]:
-            return sorted(self._action._enum_type.__members__.keys())
-
-        def choices_list(self) -> str:
-            return ", ".join(self.choices())
-
         def __repr__(self) -> str:
-            return self.choices_list()
+            return self._action._choices_list()
 
         def __iter__(self):
-            yield self.choices()
+            yield self._action._choices()
 
-        def __contains__(self, value: str) -> bool:
-            if value == "":
-                if self._action._allow_empty:
-                    return True
-                raise argparse.ArgumentError(
-                    self._action,
-                    f"Empty value is not allowed, chose at least one of [{self.choices_list()}].",
-                )
-            for v in value.split(","):
-                v = v.strip()
-                if not v:
-                    raise argparse.ArgumentError(
-                        self._action,
-                        "Empty sub values are not allowed (that means values containing `,,`).",
-                    )
-                if v.upper() not in self.choices():
-                    raise argparse.ArgumentError(
-                        self._action,
-                        f"Sub value '{v}' is not a valid {self._action._enum_type} value, chose from [{self.choices_list()}].",
-                    )
+        def __contains__(self, value: Any) -> bool:
+            self._action._parse_list(value)
             return True
 
     def __init__(self, **kwargs):
-        self._enum_type = kwargs.pop("type", None)
+        self._enum_type = kwargs.pop("type", None)  # NOTE: Not actually setting `type`.
         self._allow_empty = kwargs.pop("allow_empty", False)
         self._container_type = kwargs.pop("container_type", list)
-
-        if self._enum_type is None or not issubclass(self._enum_type, Enum):
-            raise ValueError(
-                f"Type must be an Enum, provided type is '{self._enum_type}'."
-            )
-
+        choices = kwargs.pop("choices", None)
         kwargs.setdefault("choices", self.Choices(action=self))
         super(ActionEnumList, self).__init__(**kwargs)
+        if choices:
+            raise argparse.ArgumentError(
+                self,
+                "Cannot (currently) restrict choices.",
+            )
+        if self._enum_type is None or not issubclass(self._enum_type, Enum):
+            raise argparse.ArgumentError(
+                self, f"Type must be an Enum, provided type is '{self._enum_type}'."
+            )
+        self.default = (
+            self._parse_list(self.default) if self.default else self._container_type()
+        )
+        self.default_str = ", ".join([str(v.name) for v in self.default])
+
+    def _choices(self) -> Iterable[str]:
+        return sorted(self._enum_type.__members__.keys())
+
+    def _choices_list(self) -> str:
+        return ", ".join(self._choices())
+
+    def _parse_list(self, values: str | Iterable[str | Enum] | None) -> Any:
+        if values:
+            if isinstance(values, str):
+                values = values.split(",")
+            elif isinstance(values, collections.abc.Iterable):
+                strs = []
+                enums = []
+                for v in values:
+                    if isinstance(v, str):
+                        strs.extend(v.split(","))
+                    elif isinstance(v, Enum):
+                        enums.append(v)
+                        strs.append(str(v))
+                    else:
+                        raise argparse.ArgumentError(
+                            self,
+                            f"Received bad sub value of type `{type(v)}` from values [{values}] of type `{type(values)}`, expected sub values of type `{self._enum_type}.",
+                        )
+                if enums and len(enums) == len(strs):
+                    return self._container_type(enums)
+                values = strs
+        if not values or [v for v in values if isinstance(v, str) and not v]:
+            if values:
+                v_str = "sub value"
+                given = f", given `{values}`"
+            else:
+                if self._allow_empty:
+                    return self._container_type()
+                v_str = "value"
+                given = ""
+            raise argparse.ArgumentError(
+                self,
+                f"Empty {v_str} is not allowed, chose at least one of [{self._choices_list()}]{given}.",
+            )
+        return self._container_type(
+            [self._parse(v) for v in values if self._parse(v) is not None]
+        )
+
+    def _parse(self, value: str | Enum) -> Enum | None:
+        if isinstance(value, self._enum_type):
+            return value
+        if not isinstance(value, str):
+            raise argparse.ArgumentError(
+                self,
+                f"Sub values must be of type `str` or `{self._enum_type}`, given `{type(value)}`.",
+            )
+        if not value:
+            raise argparse.ArgumentError(
+                self,
+                "Empty sub values are not allowed (that includes values containing `,,`).",
+            )
+        try:
+            return self._enum_type.__getitem__(value.strip().upper())
+        except KeyError as err:
+            raise argparse.ArgumentError(
+                self,
+                f"Sub value '{value}' is not a valid {self._enum_type} value, chose from [{self._choices_list()}].",
+            )
 
     def __call__(self, parser, namespace, values, option_string=None) -> None:
-        if isinstance(values, list):
-            values_str = ",".join(values)
-        elif isinstance(values, str):
-            values_str = values
-        else:
-            raise argparse.ArgumentError(self, "Unexpected value type {type(values)}.")
-        value = self._container_type(
-            [
-                self._enum_type.__getitem__(v.strip().upper())
-                for v in values_str.split(",")
-                if v
-            ]
-        )
-        setattr(namespace, self.dest, value)
+        setattr(namespace, self.dest, self._parse_list(values))
 
 
 def _MaybeMidnight(
