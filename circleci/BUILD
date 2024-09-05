@@ -80,7 +80,12 @@ genrule(
     srcs = ["//:README.header.txt"],
     outs = ["readme.txt"],
     cmd = """
-        ./$(location :workflows) help --help_output_mode=markdown --all_commands --prefix="$(location //:README.header.txt)" > "$@"
+        ./$(location :workflows) help \
+            --all_commands \
+            --header_level=1 \
+            --help_output_mode=markdown \
+            --prefix="$(location //:README.header.txt)" \
+            > "$@"
     """,
     tools = [":workflows"],
 )

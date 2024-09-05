@@ -371,6 +371,12 @@ class Help(Command):
             type=Path,
             help="A file that should be used as a prefix on output.",
         )
+        self.parser.add_argument(
+            "--header_level",
+            default=0,
+            type=int,
+            help="The current header level which gets added to the generated headers.",
+        )
         self.esequential_mpty_lines: int = 0
 
     def Print(self, text: str = "") -> None:
@@ -407,17 +413,17 @@ class Help(Command):
                 self.esequential_mpty_lines = 0
                 globals()["Print"](t)
 
-    def H1(self, text: str):
+    def _header(self, text: str, level: int = 1):
         if self.args.help_output_mode == HelpOutputMode.MARKDOWN:
-            self.Print(f"# {text.rstrip(':')}")
+            self.Print(f"{'#'*(level+self.args.header_level)} {text.rstrip(':')}")
         else:
             self.Print(f"{text}\n")
 
+    def H1(self, text: str):
+        self._header(text=text, level=1)
+
     def H2(self, text: str):
-        if self.args.help_output_mode == HelpOutputMode.MARKDOWN:
-            self.Print(f"## {text.rstrip(':')}")
-        else:
-            self.Print(f"{text}\n")
+        self._header(text=text, level=2)
 
     def Code(self, text: str):
         if self.args.help_output_mode == HelpOutputMode.MARKDOWN:
