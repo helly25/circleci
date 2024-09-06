@@ -423,7 +423,7 @@ class FlagsTest(unittest.TestCase):
             ),
         ]
     )
-    def test_EnumListAction(self, test: FlagTestData):
+    def test_ActionEnumList(self, test: FlagTestData):
         self.FlagTest(test)
 
     @parameterized.expand(
@@ -672,7 +672,285 @@ class FlagsTest(unittest.TestCase):
             ),
         ]
     )
-    def test_DateTimeOrTimeDeltaAction(self, test: FlagTestData):
+    def test_ActionDateTimeOrTimeDelta(self, test: FlagTestData):
+        self.FlagTest(test)
+
+    @parameterized.expand(
+        [
+            FlagTestData(
+                test="Parse empty.",
+                expected="argument flag: value must not be empty.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                ),
+                input=[""],
+            ),
+            FlagTestData(
+                test="Parse default None.",
+                expected=None,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    nargs="?",
+                ),
+                input=[],
+            ),
+            FlagTestData(
+                test="Parse default value.",
+                expected=25,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    default=25,
+                    nargs="?",
+                ),
+                input=[],
+            ),
+            FlagTestData(
+                test="Parse zero.",
+                expected="argument flag: value does not have required unit `B`.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                ),
+                input=["0"],
+            ),
+            FlagTestData(
+                test="Parse zero, no unit required.",
+                expected=0,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    unit_required=False,
+                ),
+                input=["0"],
+            ),
+            FlagTestData(
+                test="Parse zero bytes.",
+                expected=[0, 0, 0, 0, 0],
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    nargs="+",
+                ),
+                input=["0B", "0b", "0.b", ".0b", "0.0b"],
+            ),
+            FlagTestData(
+                test="Parse '.' is invalid.",
+                expected="argument flag: value cannot be '.'.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                ),
+                input=[".B"],
+            ),
+            FlagTestData(
+                test="Parse '.ib' is invalid.",
+                expected="argument flag: value has bad suffix case, got '.ib'.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    unit_case_sensitive=False,
+                    unit_required=True,
+                    suffix_case_sensitive=False,
+                ),
+                input=[".ib"],
+            ),
+            FlagTestData(
+                test="Parse zero X.",
+                expected=0,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    unit="X",
+                ),
+                input=["0x"],
+            ),
+            FlagTestData(
+                test="Parse zero X, case sensitive, finding z.",
+                expected="argument flag: value does not have required unit `X`.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    unit="X",
+                    unit_case_sensitive=True,
+                ),
+                input=["0z"],
+            ),
+            FlagTestData(
+                test="Parse zero X, case sensitive.",
+                expected="argument flag: value does not have required unit `X` (found via case insensitive search).",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    unit="X",
+                    unit_case_sensitive=True,
+                ),
+                input=["0x"],
+            ),
+            FlagTestData(
+                test="Parse zero X, case sensitive with suffix.",
+                expected="argument flag: value has bad suffix case, got '0kX'.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    unit="X",
+                    unit_case_sensitive=True,
+                ),
+                input=["0kX"],
+            ),
+            FlagTestData(
+                test="Parse zero X, case sensitive with i-suffix.",
+                expected="argument flag: value has bad suffix case, got '0KIX'.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    unit="X",
+                    unit_case_sensitive=True,
+                ),
+                input=["0KIX"],
+            ),
+            FlagTestData(
+                test="Parse zero X, case sensitive with i-suffix (correct case).",
+                expected=0,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    unit="X",
+                    unit_case_sensitive=True,
+                ),
+                input=["0KiX"],
+            ),
+            FlagTestData(
+                test="Parse zero X, case sensitive with suffix (ignore-case).",
+                expected=0,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    unit="X",
+                    unit_case_sensitive=True,
+                    suffix_case_sensitive=False,
+                ),
+                input=["0kX"],
+            ),
+            FlagTestData(
+                test="Parse zero X, case sensitive, correct case.",
+                expected=0,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    unit="X",
+                    unit_case_sensitive=False,
+                ),
+                input=["0X"],
+            ),
+            FlagTestData(
+                test="Parse 2 kilo-bytes.",
+                expected=2000,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                ),
+                input=["2kb"],
+            ),
+            FlagTestData(
+                test="Parse 2 kibi-bytes.",
+                expected=2048,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                ),
+                input=["2kib"],
+            ),
+            FlagTestData(
+                test="Parse list of bytes.",
+                expected=[max(1, f) * 1000**f for f in range(10)],
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    nargs="+",
+                ),
+                input=[
+                    "1b",
+                    "1kb",
+                    "2mb",
+                    "3gb",
+                    "4tb",
+                    "5pb",
+                    "6eb",
+                    "7zb",
+                    "8yb",
+                    "9xb",
+                ],
+            ),
+            FlagTestData(
+                test="Parse list of bytes (caps).",
+                expected=[max(1, f) * 1000**f for f in range(10)],
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    nargs="+",
+                    unit_case_sensitive=True,
+                    suffix_case_sensitive=True,
+                ),
+                input=[
+                    "1B",
+                    "1KB",
+                    "2MB",
+                    "3GB",
+                    "4TB",
+                    "5PB",
+                    "6EB",
+                    "7ZB",
+                    "8YB",
+                    "9XB",
+                ],
+            ),
+            FlagTestData(
+                test="Parse list of i-bytes.",
+                expected=[max(1, f) * 1024**f for f in range(10)],
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    nargs="+",
+                ),
+                input=[
+                    "1b",
+                    "1kib",
+                    "2mib",
+                    "3gib",
+                    "4tib",
+                    "5pib",
+                    "6eib",
+                    "7zib",
+                    "8yib",
+                    "9xib",
+                ],
+            ),
+            FlagTestData(
+                test="Parse list of bytes (caps).",
+                expected=[max(1, f) * 1024**f for f in range(10)],
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    nargs="+",
+                    unit_case_sensitive=True,
+                    suffix_case_sensitive=True,
+                ),
+                input=[
+                    "1B",
+                    "1KiB",
+                    "2MiB",
+                    "3GiB",
+                    "4TiB",
+                    "5PiB",
+                    "6EiB",
+                    "7ZiB",
+                    "8YiB",
+                    "9XiB",
+                ],
+            ),
+            FlagTestData(
+                test="Parse fraction and space.",
+                expected=[0, 1234, 1325606222],
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    nargs="+",
+                    unit_case_sensitive=True,
+                    suffix_case_sensitive=True,
+                ),
+                input=["0.7 B", "1.2345 KB", "1.234567 GiB"],
+            ),
+        ]
+    )
+    def test_ActionByteSize(self, test: FlagTestData):
         self.FlagTest(test)
 
 
