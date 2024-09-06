@@ -733,6 +733,16 @@ class FlagsTest(unittest.TestCase):
                 input=["B"],
             ),
             FlagTestData(
+                test="Unit only is invalid.",
+                expected="argument flag: value cannot be empty.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                    unit="0",
+                ),
+                input=["0"],
+            ),
+            FlagTestData(
                 test="Parse zero bytes.",
                 expected=[0, 0, 0, 0, 0],
                 action=ActionArgs(
