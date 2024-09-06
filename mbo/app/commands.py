@@ -57,7 +57,7 @@ from typing import TYPE_CHECKING, Any, Type, cast
 
 from argparse_formatter import ParagraphFormatter
 
-from mbo.app.flags import EnumAction
+from mbo.app.flags import ActionEnum
 
 if TYPE_CHECKING:
     from _typeshed import OpenTextMode
@@ -335,7 +335,7 @@ class Command(ABC):
             "--help-output-mode",
             dest="help_output_mode",
             type=HelpOutputMode,
-            action=EnumAction,
+            action=ActionEnum,
             help="Output mode for help.",
         )
         command.Prepare(argv)
