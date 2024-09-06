@@ -489,6 +489,8 @@ def ParseByteSize(
             f"value does not match pattern (not a valid byte size), got '{original}'."
         )
     number = match.group(1)
+    if number == "":
+        raise ValueError("value cannot be empty.")
     if number == ".":
         raise ValueError("value cannot be '.'.")
     result = float(number) if number.find(".") > -1 else int(number)

@@ -678,15 +678,6 @@ class FlagsTest(unittest.TestCase):
     @parameterized.expand(
         [
             FlagTestData(
-                test="Parse empty.",
-                expected="argument flag: value must not be empty.",
-                expected_error=argparse.ArgumentError,
-                action=ActionArgs(
-                    action=mbo.app.flags.ActionByteSize,
-                ),
-                input=[""],
-            ),
-            FlagTestData(
                 test="Parse default None.",
                 expected=None,
                 action=ActionArgs(
@@ -694,6 +685,15 @@ class FlagsTest(unittest.TestCase):
                     nargs="?",
                 ),
                 input=[],
+            ),
+            FlagTestData(
+                test="Parse empty.",
+                expected="argument flag: value must not be empty.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                ),
+                input=[""],
             ),
             FlagTestData(
                 test="Parse default value.",
@@ -722,6 +722,15 @@ class FlagsTest(unittest.TestCase):
                     unit_required=False,
                 ),
                 input=["0"],
+            ),
+            FlagTestData(
+                test="Unit only is invalid.",
+                expected="argument flag: value cannot be empty.",
+                expected_error=argparse.ArgumentError,
+                action=ActionArgs(
+                    action=mbo.app.flags.ActionByteSize,
+                ),
+                input=["B"],
             ),
             FlagTestData(
                 test="Parse zero bytes.",
