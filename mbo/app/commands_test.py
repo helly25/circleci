@@ -15,6 +15,7 @@
 
 """Tests for commands.py."""
 
+import argparse
 import io
 import sys
 import unittest
@@ -28,9 +29,9 @@ from mbo.app.commands import Command, Print, SnakeCase
 class HelloDear(Command):
     """Hello Dear test command."""
 
-    def __init__(self):
-        super(HelloDear, self).__init__()
-        self.parser.add_argument("name", nargs="?")
+    def __init__(self, parser: argparse.ArgumentParser):
+        super(HelloDear, self).__init__(parser=parser)
+        parser.add_argument("name", nargs="?")
 
     def Main(self):
         print(

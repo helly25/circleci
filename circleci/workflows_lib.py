@@ -91,10 +91,10 @@ class CircleCiCommand(Command):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
-    def __init__(self) -> None:
-        super(CircleCiCommand, self).__init__()
+    def __init__(self, parser: argparse.ArgumentParser) -> None:
+        super(CircleCiCommand, self).__init__(parser)
         self.log_requests_to_file: Optional[SupportsWrite[str]] = None
-        self.parser.add_argument(
+        parser.add_argument(
             "--circleci_server",
             default="",
             type=str,
@@ -103,25 +103,25 @@ class CircleCiCommand(Command):
                 "'CIRCLECI_SERVER' which defaults to 'https://circleci.com')."
             ),
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--circleci_token",
             default="",
             type=str,
             help="CircleCI Auth Token (defaults to environment variable 'CIRCLECI_TOKEN')",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--circleci_project_slug",
             default="",
             type=str,
             help="CircleCI project-slug (defaults to environment variable 'CIRCLECI_PROJECT_SLUG').",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--log_requests_to_file",
             type=Path,
             default=None,
             help="Whether to log all requests for debugging purposes.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--log_requests_details",
             default=[LogRequestDetail.REQUEST],
             type=LogRequestDetail,
@@ -131,8 +131,8 @@ class CircleCiCommand(Command):
             help="Comma separated list of LogRequestDetails (default: [%(default_str)s]).",
         )
 
-    def Prepare(self, argv: list[str]) -> None:
-        super(CircleCiCommand, self).Prepare(argv)
+    def Prepare(self) -> None:
+        super(CircleCiCommand, self).Prepare()
         self.log_requests_to_file = None
         if self.args.log_requests_to_file:
             self.log_requests_to_file = OpenTextFile(
@@ -213,9 +213,9 @@ class RequestBranches(CircleCiCommand):
     ```
     """
 
-    def __init__(self):
-        super(RequestBranches, self).__init__()
-        self.parser.add_argument(
+    def __init__(self, parser: argparse.ArgumentParser):
+        super(RequestBranches, self).__init__(parser)
+        parser.add_argument(
             "--workflow",
             default="default_workflow",
             type=str,
@@ -237,8 +237,8 @@ class RequestWorkflows(CircleCiCommand):
     ```
     """
 
-    def __init__(self):
-        super(RequestWorkflows, self).__init__()
+    def __init__(self, parser: argparse.ArgumentParser):
+        super(RequestWorkflows, self).__init__(parser)
 
     def Main(self):
         for workflow in self.circleci.RequestWorkflows():
@@ -253,9 +253,9 @@ class RequestWorkflow(CircleCiCommand):
     ```
     """
 
-    def __init__(self):
-        super(RequestWorkflow, self).__init__()
-        self.parser.add_argument(
+    def __init__(self, parser: argparse.ArgumentParser):
+        super(RequestWorkflow, self).__init__(parser)
+        parser.add_argument(
             "--workflow_id",
             type=str,
             help="Workflow ID to request.",
@@ -286,22 +286,22 @@ class Fetch(CircleCiCommand):
     ```
     """
 
-    def __init__(self):
-        super(Fetch, self).__init__()
-        self.parser.add_argument(
+    def __init__(self, parser: argparse.ArgumentParser):
+        super(Fetch, self).__init__(parser)
+        parser.add_argument(
             "--workflow",
             default=None,
             type=str,
             help="The name of the workflow(s) to read. Multiple workflows can be read by "
             "separating with comma. If no workflow is set, then fetch all workflows.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--output",
             default="/tmp/circleci.csv",
             type=Path,
             help="Name of the output file.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--end",
             action=ActionDateTimeOrTimeDelta,
             verify_only=True,
@@ -312,7 +312,7 @@ class Fetch(CircleCiCommand):
                 This defaults to `now`.
             """,
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--start",
             default="",
             action=ActionDateTimeOrTimeDelta,
@@ -324,19 +324,19 @@ class Fetch(CircleCiCommand):
                 This defaults to `-90days` (or `-89days` if --midnight is active).
             """,
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--midnight",
             default=True,
             action=argparse.BooleanOptionalAction,
             help="""Adjust start and end date/time to midnight of the same day.
             """,
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--progress",
             action=argparse.BooleanOptionalAction,
             help="Whether to indicate progress (defaults to True if `--fetch_workflow_details` is active).",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--fetch_workflow_details",
             default=True,
             action=argparse.BooleanOptionalAction,
@@ -445,20 +445,20 @@ class FetchDetails(CircleCiCommand):
     ```
     """
 
-    def __init__(self):
-        super(FetchDetails, self).__init__()
-        self.parser.add_argument(
+    def __init__(self, parser: argparse.ArgumentParser):
+        super(FetchDetails, self).__init__(parser)
+        parser.add_argument(
             "--input",
             type=Path,
             help="A CSV file generated from `workflow.py fetch`.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--output",
             default="/tmp/circleci_details.csv.bz2",
             type=Path,
             help="Name of the output file.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--progress",
             default=True,
             action=argparse.BooleanOptionalAction,
@@ -504,27 +504,27 @@ class Combine(CircleCiCommand):
     ```
     """
 
-    def __init__(self):
-        super(Combine, self).__init__()
-        self.parser.add_argument(
+    def __init__(self, parser: argparse.ArgumentParser):
+        super(Combine, self).__init__(parser)
+        parser.add_argument(
             "input",
             type=Path,
             nargs="+",
             help="List of CSV files generated from `workflow.py fetch`.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--output",
             default="/tmp/circleci.csv",
             type=Path,
             help="Name of the output file.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--fetch_workflow_details",
             default=True,
             action=argparse.BooleanOptionalAction,
             help="Whether workflow details should automatically be added (if not present).",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--progress",
             action=argparse.BooleanOptionalAction,
             help="Whether to indicate progress (defaults to True if `--fetch_workflow_details` is active).",
@@ -573,64 +573,64 @@ class Filter(Command):
     ```
     """
 
-    def __init__(self):
-        super(Filter, self).__init__()
-        self.parser.add_argument(
+    def __init__(self, parser: argparse.ArgumentParser):
+        super(Filter, self).__init__(parser)
+        parser.add_argument(
             "--workflow",
             default=None,
             type=str,
             help="The name of the workflow(s) to accept. Multiple workflows can be userd by "
             "separating with comma. If no workflow is set, then accept all workflows.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--input",
             type=Path,
             help="CSV file generated from `workflow.py fetch`.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--output",
             default="/tmp/circleci.csv",
             type=Path,
             help="Name of the output file.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--min_duration_sec",  # TODO(helly25): Use a duration parser
             type=int,
             default=600,
             help="Mininum duration to accept row in [sec].",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--output_duration_as_mins",
             default=True,
             action=argparse.BooleanOptionalAction,
             help="Whether to report duration values in minutes.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--exclude_branches",
             type=str,
             default="main|master|develop|develop-freeze.*",
             help="Exclude branches by full regular expression match.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--exclude_incomplete_reruns",
             default=True,
             action=argparse.BooleanOptionalAction,
             help="If workflow details are available, reject inomplete reruns "
             "(e.g.: rerun-single-job, rerun-workflow-from-failed).",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--only_branches",
             type=str,
             default="",
             help="Accept branches by full regular expression match.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--only_status",
             type=str,
             default="success",
             help="Accept only listed status values (multiple separated by comma).",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--only_weekdays",
             type=str,
             default="12345",
