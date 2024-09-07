@@ -23,9 +23,9 @@ For details read class `Command` documentation. Usage example:
 import commands
 
 class HelloDear(commands.Command):
-    def __init__(self):
-        super(FetchDetails, self).__init__()
-        self.parser.add_argument("name", nargs="?")
+    def __init__(self, parser: argparse.ArgumentParser):
+        super(FetchDetails, self).__init__(parser)
+        parser.add_argument("name", nargs="?")
 
     def Main(self):
         print(f"Hello, dear {self.args.name}.")
@@ -45,6 +45,7 @@ Outputs: `Hello, dear me.`
 
 import argparse
 import bz2
+import dataclasses
 import gzip
 import inspect
 import io
@@ -250,10 +251,17 @@ class Command(ABC):
     must override `Main` which actually implements the command functionality
     that gets executed for the sub-command.
 
-    Note that `Prepare` gets called prior to `Main` and provides `self.args`.
-    In particular intermediate Command classes that are still abstract as they
-    implement shared functionality may override `Parepare` while still providing
-    `self.args` by calling `Command.Prepare`.
+    The `__init__` function for all registered Commands will always be executed
+    and thus should not contain expensive initialization.
+
+    However, the commands may override `Prepare` which gets called prior to
+    `Main`. Unline `__init__` the `Prepare` method will only be executed if the
+    command is actually being executed. When `Prepare` gets executed `self.args`
+    contains all parsed arguments. The `Prepare` method thus is the correct
+    place for expensive initialization. Further, intermediate Command classes
+    that are still abstract as they implement shared functionality may override
+    `Parepare` while still invoking `Command.Prepare`. In `self.args.command`
+    they can check the anem of the executed command.
 
     All derived Command classes that are not abstract (see above) register
     themselves as a Command. The Command's command-line (sub-command) name is
@@ -261,27 +269,31 @@ class Command(ABC):
     class's document string. In the example at the top the class `HelloDear`
     becomes sub-command `hello_dear`.
 
-    The base class provides an argument parser `argparse.ArgumentParser` as
-    `self.parser`. That parser should be extended in the `__init__` methods of
-    derived Command implementations. The parser's description is also taken
-    from the class's documentation string.
+    The `__init__` method receives an argument parser `argparse.ArgumentParser`
+    which must be forwarded to the base classes `__init__`. The base class then
+    sets the parser's description to the class's documentation string. This
+    `parser` can be used to add sub-command specific arguments.
 
-    The arguments are being parsed through `Prepare` which is always called
-    right before `Main` gets invoked.
+    The arguments are being parsed prior to calling `Prepare` which is always
+    called right before `Main` gets invoked.
     """
 
-    _commands: dict[str, Type] = {}
+    @dataclasses.dataclass
+    class CommandData:
+        command_type: Any
+        command: Any = None
+        sub_parser: argparse.ArgumentParser | None = None
+
+    _commands: dict[str, CommandData] = {}
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if not inspect.isabstract(cls):
-            cls._commands[cls.name()] = cls
+            cls._commands[cls.name()] = Command.CommandData(command_type=cls)
 
-    def __init__(self):
-        self.parser = argparse.ArgumentParser(
-            description=self.description(),
-            formatter_class=CommandParagraphFormatter,
-        )
+    def __init__(self, parser: argparse.ArgumentParser):
+        parser.description = self.description()
+        self.args: argparse.Namespace
 
     @classmethod
     def name(cls):
@@ -291,25 +303,15 @@ class Command(ABC):
     def description(cls):
         return DocOutdent(cls.__doc__)
 
-    def Prepare(self, argv: list[str]) -> None:
-        """Prepare the command for execution by parsing the arguments in `argv`.
+    def Prepare(self) -> None:
+        """Prepare the command for execution after parsing the command line.
 
         Args:
-            argv:  Unlike `Argparse.parse_args` this does not allow to be called
-                   without arguments and requires the full `argv` including the
-                   program argument at index 0. Effectivly this achieves the
-                   same as if `Argparse.parse_args` was passed no argument (in
-                   which case it uses `sys.argv`.
+            None
+
+        Note: At the time of calling the commandline is parsed into `self.args`.
         """
-        self.program = argv[0] if argv else "-"
-        match = re.fullmatch(
-            "(?:.*/)?bazel-out/.*/bin/.*[.]runfiles/(?:__main__|_main)/(.*)/([^/]+)[.]py",
-            self.program,
-        )
-        if match:
-            self.program = f"bazel run //{match.group(1)}:{match.group(2)} --"
-        self.parser.prog = self.program + " " + self.name()
-        self.args = self.parser.parse_args(argv[1:])
+        pass
 
     @abstractmethod
     def Main(self):
@@ -317,20 +319,24 @@ class Command(ABC):
 
     @staticmethod
     def Run(argv: list[str] = sys.argv):
-        command_name = argv[1] if len(argv) > 1 else ""
-        if not Command._commands or Command._commands.keys() == ["help"]:
-            Die("No `Command` were implemented.")
-        command_type = Command._commands.get(command_name, None)
-        if not command_type:
-            command_type = Command._commands["help"]
-        command = command_type()
-        argv = [argv[0]] + argv[2:]
-        command.parser.add_argument(
+        program = argv[0] if argv else "-"
+        match = re.fullmatch(
+            "(?:.*/)?bazel-out/.*/bin/.*[.]runfiles/(?:__main__|_main)/(.*)/([^/]+)[.]py",
+            program,
+        )
+        if match:
+            program = f"bazel run //{match.group(1)}:{match.group(2)} --"
+
+        parser = argparse.ArgumentParser(
+            prog=program,
+            formatter_class=CommandParagraphFormatter,
+        )
+        parser.add_argument(
             "--mbo_app_swallow_exceptions",
             action=argparse.BooleanOptionalAction,
             help="Whether to swollow details from exceptions and only show their error message.",
         )
-        command.parser.add_argument(
+        parser.add_argument(
             "--help_output_mode",
             "--help-output-mode",
             dest="help_output_mode",
@@ -338,8 +344,42 @@ class Command(ABC):
             action=ActionEnum,
             help="Output mode for help.",
         )
-        command.Prepare(argv)
-        CommandParagraphFormatter.SetOutputMode(command.args.help_output_mode)
+
+        # Initialize all commands and set their argument parsers.
+        subparsers = parser.add_subparsers(
+            dest="command",
+            title="COMMAND",
+            metavar="COMMAND",
+            help=(
+                f"The sub-command: {{{', '.join(Command._commands.keys())}}}.\n\n"
+                f"Use `{program} help` to get an overview of all commands."
+            ),
+        )
+        for command_name, command_data in Command._commands.items():
+            command_data.sub_parser = subparsers.add_parser(
+                name=command_name,
+                formatter_class=CommandParagraphFormatter,
+            )
+            command_data.command = command_data.command_type(
+                parser=command_data.sub_parser
+            )
+
+        # Parse the command line.
+        args = parser.parse_args(argv[1:])
+
+        # Check for a valid command.
+        if not args.command or not args.command in Command._commands:
+            # Reparse using just the arg "help", so we get that command.
+            args = parser.parse_args(["help"], args)
+            args.command = None
+
+        # Get command and prepare for execution.
+        command = Command._commands[args.command or "help"].command
+        command.args = args
+        command.Prepare()
+        CommandParagraphFormatter.SetOutputMode(args.help_output_mode)
+
+        # Execute sub-`command`.
         try:
             command.Main()
         except KeyboardInterrupt:
@@ -353,31 +393,32 @@ class Command(ABC):
 class Help(Command):
     """Provides help for the program."""
 
-    def __init__(self) -> None:
-        super(Help, self).__init__()
+    def __init__(self, parser: argparse.ArgumentParser) -> None:
+        super(Help, self).__init__(parser)
+        self.parser = parser
         self.exit_code = 0
-        self.parser.add_argument(
+        self.seq_empty_lines: int = 0
+        parser.add_argument(
             "--all_commands",
             action=argparse.BooleanOptionalAction,
             help="Whether to show all commands",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--show_usage",
             action=argparse.BooleanOptionalAction,
             help="Whether to show generated command useage (aka synopsis).",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--prefix_file",
             type=Path,
             help="A file that should be used as a prefix on output.",
         )
-        self.parser.add_argument(
+        parser.add_argument(
             "--header_level",
             default=0,
             type=int,
             help="The current header level which gets added to the generated headers.",
         )
-        self.esequential_mpty_lines: int = 0
 
     def Print(self, text: str = "") -> None:
         # Deal with links...
@@ -396,21 +437,19 @@ class Help(Command):
         # For non empty lines print at most two empty lines if some empty lines
         # preceeded.
         max_empty_lines = 1
-        self.esequential_mpty_lines = min(max_empty_lines, self.esequential_mpty_lines)
-        text = "\n" * self.esequential_mpty_lines + text
-        self.esequential_mpty_lines = 0
+        self.seq_empty_lines = min(max_empty_lines, self.seq_empty_lines)
+        text = "\n" * self.seq_empty_lines + text
+        self.seq_empty_lines = 0
         for t in text.split("\n"):
             if t.count(" ") == len(t):
                 t = ""
             if not t:
-                self.esequential_mpty_lines = min(
-                    max_empty_lines, self.esequential_mpty_lines + 1
-                )
+                self.seq_empty_lines = min(max_empty_lines, self.seq_empty_lines + 1)
             else:
-                while self.esequential_mpty_lines > 0:
+                while self.seq_empty_lines > 0:
                     globals()["Print"]("")
-                    self.esequential_mpty_lines -= 1
-                self.esequential_mpty_lines = 0
+                    self.seq_empty_lines -= 1
+                self.seq_empty_lines = 0
                 globals()["Print"](t)
 
     def _header(self, text: str, level: int = 1):
@@ -438,6 +477,9 @@ class Help(Command):
             self.Print(f"  {text}")
 
     def Main(self) -> None:
+        self.args.command = None
+        if not self.args.command:
+            self.parser.prog = self.parser.prog.removesuffix("help").removesuffix(" ")
         if self.args.prefix_file:
             self.Print(self.args.prefix_file.open("rt").read())
         first_line, program_doc = DocOutdent(
@@ -447,32 +489,32 @@ class Help(Command):
             self.Print(first_line)
             self.Print()
         self.H1(f"Usage:")
-        self.Code(f"{self.program} <command> [args...]")
+        self.Code(f"{self.parser.prog} <command> [args...]")
         self.Print()
         self.H2("Commands:")
         c_len = 3 + max([len(c) for c in Command._commands.keys()])
-        for name, command in sorted(Command._commands.items()):
+        for name, command_data in sorted(Command._commands.items()):
             name = name + ":"
-            description = command.description().split("\n\n")[0]
+            description = command_data.command_type.description().split("\n\n")[0]
             self.ListItem(f"{name:{c_len}s}{description}")
         self.Print()
         if program_doc:
             self.Print(program_doc)
             self.Print()
         self.H2(f"For command specific help use:")
-        self.Code(f"{self.program} <command> --help.")
+        self.Code(f"{self.parser.prog} <command> --help.")
         if self.args.all_commands:
-            for name, command in sorted(Command._commands.items()):
-                if command.description().find("\n\n") == -1:
+            for name, command_data in sorted(Command._commands.items()):
+                if command_data.command_type.description().find("\n\n") == -1:
                     continue
                 self.Print()
                 self.H2(f"Command {name}")
                 self.Print()
                 if self.args.help_output_mode == HelpOutputMode.TEXT:
-                    self.Print(command.description())
+                    self.Print(command_data.command_type.description())
                 else:
-                    cmd = command()
-                    cmd.parser.prog = self.program + " " + name
-                    cmd.parser.usage = argparse.SUPPRESS
-                    self.Print(cmd.parser.format_help())
+                    sub_parser = command_data.sub_parser
+                    if sub_parser:
+                        sub_parser.usage = argparse.SUPPRESS
+                        self.Print(sub_parser.format_help())
         exit(self.exit_code)
