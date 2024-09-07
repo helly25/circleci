@@ -147,9 +147,6 @@ class CommandParagraphFormatter(ParagraphFormatter):
     def IsOutputMode(self, output_mode: HelpOutputMode) -> bool:
         return self._help_output_mode == output_mode
 
-    def __init__(self, **kwargs) -> None:
-        super(CommandParagraphFormatter, self).__init__(**kwargs)
-
     def _fill_text(self, text: str, width: int, indent: str) -> str:
         if len(indent) > 4:
             indent = " " * 4
@@ -178,7 +175,7 @@ class CommandParagraphFormatter(ParagraphFormatter):
             )
         return result
 
-    def _format_action_invocation(self, action):
+    def _format_action_invocation(self, action) -> str:
         result = super(CommandParagraphFormatter, self)._format_action_invocation(
             action
         )
