@@ -323,6 +323,13 @@ class Command(ABC):
         )
         if match:
             program = f"bazel run //{match.group(1)}:{match.group(2)} --"
+        else:
+            match = re.fullmatch(
+                ".*/unzipped_pexes/[0-9a-zA-Z]*/([^/]+)[.]py",
+                program,
+            )
+            if match:
+                program = f"{match.group(1)}.pex"
 
         parser = argparse.ArgumentParser(
             prog=program,

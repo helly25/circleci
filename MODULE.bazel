@@ -28,6 +28,7 @@ _PYTHON_VERSION_SNAKE = _PYTHON_VERSION.replace(".", "_")
 bazel_dep(name = "bazel_skylib", version = "1.6.1")
 bazel_dep(name = "rules_python", version = "0.34.0")
 bazel_dep(name = "rules_mypy", version = "0.6.0")
+bazel_dep(name = "aspect_rules_py", version = "0.8.0")
 
 bazel_dep(name = "buildifier_prebuilt", version = "6.4.0", dev_dependency = True)
 
@@ -67,3 +68,7 @@ types.requirements(
     requirements_txt = "//:requirements.in",
 )
 use_repo(types, "pip_types")
+
+tools = use_extension("@aspect_rules_py//py:extensions.bzl", "py_tools")
+tools.rules_py_tools()
+use_repo(tools, "rules_py_pex_2_3_1")
