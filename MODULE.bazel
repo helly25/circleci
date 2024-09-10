@@ -26,7 +26,9 @@ _PYTHON_VERSION = "3.12"
 _PYTHON_VERSION_SNAKE = _PYTHON_VERSION.replace(".", "_")
 
 bazel_dep(name = "bazel_skylib", version = "1.6.1")
-bazel_dep(name = "rules_python", version = "0.34.0")
+
+bazel_dep(name = "rules_python", version = "0.34.0", dev_dependency = True)
+
 bazel_dep(name = "rules_mypy", version = "0.6.0")
 bazel_dep(name = "aspect_rules_py", version = "0.8.0")
 
@@ -38,6 +40,7 @@ python = use_extension(
     dev_dependency = True,
 )
 python.toolchain(
+    configure_coverage_tool = True,
     is_default = True,
     python_version = _PYTHON_VERSION,
 )
