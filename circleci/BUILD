@@ -80,9 +80,6 @@ py_pex_binary(
     name = "workflows",
     testonly = True,
     binary = ":workflows_bin",
-    python_interpreter_constraints = [
-        "CPython==3.12.*",
-    ],
 )
 
 genrule(
