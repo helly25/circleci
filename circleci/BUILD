@@ -15,9 +15,10 @@
 
 """Tool to fetch and analyze CircleCI workflows."""
 
+load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_pex_binary")
 load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("@my_pip_deps//:requirements.bzl", "requirement")
-load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -64,14 +65,21 @@ py_test(
 )
 
 py_binary(
-    name = "workflows",
+    name = "workflows_bin",
     testonly = True,
     srcs = ["workflows.py"],
     tags = ["manual"],
+    visibility = ["//visibility:private"],
     deps = [
         ":workflows_lib_py",
         "//mbo/app:commands_py",
     ],
+)
+
+py_pex_binary(
+    name = "workflows",
+    testonly = True,
+    binary = ":workflows_bin",
 )
 
 genrule(
